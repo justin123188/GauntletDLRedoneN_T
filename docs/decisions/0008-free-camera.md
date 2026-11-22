@@ -49,5 +49,6 @@ its inputs.
 
 Not done: pitch control, recentre button, mouse control, exchanging the
 setting in network play, per-level limits for views that show unfinished
-geometry. Verification so far: synthetic unit tests (FreeCam bounds, the
-overlay rows); not yet played on the disc.
+geometry. Verification: synthetic unit tests (FreeCam bounds, the overlay
+rows); the owner's playtest on Windows (2026-11-22, test build 2): the
+right stick turns and zooms the camera in play.

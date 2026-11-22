@@ -425,4 +425,6 @@ mono their average, the rest silent) and any cpal sample format. A thread
 owns the stream and reopens it on a stream error or when the default output
 device changes. remaster-log.txt beside gdl_play.exe records the device, its
 formats, the choice and errors. Stereo f32 devices get the same samples as
-before. Checked: Windows cross-build; not yet heard on a surround device.
+before. Checked: Windows cross-build; the owner's Windows PC, silent with
+1.3.6, plays sound with this build (playtest 2026-11-22; the device's
+format not yet read from its remaster-log.txt).
