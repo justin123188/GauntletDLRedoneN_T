@@ -737,7 +737,7 @@ last (texmod_others; HYPOTHESIS: MBOX_FindTexture's order, as
 spawn_package_texmods), and the first level builds its libraries before
 the bodies. Checked (G1, TEST runs): the yellow Wizard's hand shows a
 yellow glow where frame 500 had the placeholder; the red Wizard unchanged
-to the eye; both Wizards' per-update simulation hashes unchanged. Not
-compared: the glow against PCSX2; whether the red Wizard's glow now steps
-through WEAPONS' frames.
+to the eye; both Wizards' per-update simulation hashes unchanged; the owner's playtest (2026-11-22):
+"Confirmed fixed". Not compared: the glow against PCSX2; whether the red
+Wizard's glow now steps through WEAPONS' frames.
 

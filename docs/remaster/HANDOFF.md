@@ -242,8 +242,9 @@ later. And effects look better mostly through their textures.
    reloaded: HUD images (next start). A big reload costs a hitch (142
    textures: 1 s); reading and chaining could move to worker threads.
    - Also found and fixed on the way: soft glows sharpened by the HD
-     upscaler (decisions/0010, PROCESSING 2), and an error box when the
-     game quit during HD generation.
+     upscaler (decisions/0010, PROCESSING 2), an error box when the
+     game quit during HD generation, and the yellow Wizard's magenta hand
+     glow (an upstream bug: research/player.md; the owner confirmed it fixed).
    - To do (the owner, 2026-11-22: "not sure that really a problem"):
      small effect sprites kept original by HD (the Red Wizard's sparks) show
      a dark rim when zoomed in: their clear texels are black, which bilinear
