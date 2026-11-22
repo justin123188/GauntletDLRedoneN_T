@@ -61,4 +61,6 @@ with Palatino dropped in during play and removed: "fonts drawn:
 the original; … 1 back to the original", screenshots of the original,
 Palatino and the original again. Simulation hashes equal the reference
 with a font page in use. Georgia and Constantia have old-style (uneven)
-digits. Not checked: the owner's playtest.
+digits. The owner's playtest (2026-11-22, the build of 3f8c979 with
+Palatino Linotype Bold as 8HIFONTS, their choice from the previews):
+"Confirmed working and I like it".
