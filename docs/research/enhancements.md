@@ -580,6 +580,26 @@ retail-derived ships.
   same result (50 C2 textures, mean 0.0000 / 255, max 1); Direct3D 12, which
   wgpu may choose on Windows, is not checked here. The original
   presentation passes baseline_gate.py (gate-hd3; H4 re-captured once).
+- The child after its parent ended (this fork, 2026-11-22): it stopped,
+  then its final `println!` panicked on the closed pipe and the panic hook
+  reported a fatal error (Windows: last-error.txt and a message box after
+  the game had closed; the owner's last-error.txt held "failed printing to
+  stdout: The pipe is being closed. (os error 232)"); a stop in the scan
+  stage returned "cancelled", reported as "The game could not start".
+  Now a stop ends the child with success and its last line is a
+  non-panicking write. Checked: the generator with its stdout pipe closed
+  at once and after 135 generated textures exits with code 0 and writes no
+  last-error.txt (isolated APPDATA). The previous build was not run that
+  way (it would show the box): the cause is inferred.
+- Soft glows (this fork, 2026-11-22, the owner's playtest: pickup and
+  spell glows "lost some of their transparency" with a black outline when
+  zoomed in). Some glow sprites are not effects by the rules above (drawn
+  as items or weapon parts): GEMSHEEN_*, GEM_HIGHLIGHT, GEMSTONES3,
+  GLOWBOLT, GLOWBOLTF, GLOWFEATHER, TURBO_GLOW_NEW, MAGIC are in the pack.
+  Their blended alpha goes through the network as grey, which sharpens a
+  soft halo into hard bands with clear gaps (GLOWBOLT: the arrow, a clear
+  ring, a solid outer ring). Compared from the files (the G1 dump against
+  the owner's pack); not yet A/B-rendered in the game.
 
 ## Settings overlay and keys
 
