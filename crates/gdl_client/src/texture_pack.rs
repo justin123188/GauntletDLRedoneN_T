@@ -97,6 +97,11 @@ pub fn default_dump_dir() -> Option<PathBuf> {
     Some(game_dir()?.join("texture_dump"))
 }
 
+/// The texture_work folder beside the game (texture_fix: images to fit).
+pub fn default_work_dir() -> Option<PathBuf> {
+    Some(game_dir()?.join("texture_work"))
+}
+
 /// The pack folder, made when missing, with its README.txt.
 pub fn ensure_pack_dir(dir: &Path) {
     if std::fs::create_dir_all(dir).is_ok() {
@@ -118,6 +123,9 @@ To get the game's textures: press F10, choose Graphics..., and set Save\r
 textures to On. Every texture the game loads from then on is saved to the\r
 texture_dump folder beside this one. Open index.html there to browse them\r
 by character, level and label.\r
+\r
+Images made with ChatGPT go in the texture_work folder instead: the game\r
+fits them and puts the result here. See texture_work\\README.txt.\r
 ";
 
 /// The user's pack in use (None: none).

@@ -45,18 +45,27 @@ pub fn dump_rgba(gs: &[u8]) -> Vec<u8> {
 }
 
 /// numpy.pad index: wrapped (mode 'wrap') or replicated ('edge').
-fn src_index(i: isize, size: usize, wrap: bool) -> usize {
+pub(crate) fn src_index(i: isize, size: usize, wrap: bool) -> usize {
     if wrap { i.rem_euclid(size as isize) as usize } else { i.clamp(0, size as isize - 1) as usize }
 }
 
 /// upscale_compare.py fill_clear: colours of texels outside `kept` from the
 /// mean of kept 8-neighbours, repeated outward until every texel has one.
-fn fill_clear(rgb: &mut [[f32; 3]], kept: &[bool], w: usize, h: usize, wrap_u: bool, wrap_v: bool) {
+pub(crate) fn fill_clear(rgb: &mut [[f32; 3]], kept: &[bool], w: usize, h: usize, wrap_u: bool, wrap_v: bool) {
+    fill_clear_rings(rgb, kept, (w, h), (wrap_u, wrap_v), usize::MAX);
+}
+
+/// fill_clear for at most `rings` steps outward (NATIVE, this fork:
+/// texture_fix at a fitted size, where only the rings nearest the kept
+/// texels reach a filtered sample; usize::MAX is fill_clear).
+pub(crate) fn fill_clear_rings(rgb: &mut [[f32; 3]], kept: &[bool], (w, h): (usize, usize), (wrap_u, wrap_v): (bool, bool), rings: usize) {
     let mut have = kept.to_vec();
     if !have.iter().any(|&k| k) {
         return;
     }
-    while !have.iter().all(|&k| k) {
+    let mut ring = 0;
+    while ring < rings && !have.iter().all(|&k| k) {
+        ring += 1;
         let mut acc = vec![[0f32; 3]; w * h];
         let mut cnt = vec![0f32; w * h];
         for dy in [-1isize, 0, 1] {
@@ -126,12 +135,12 @@ pub fn prepare(rgba8: &[u8], width: usize, height: usize, flags: u16) -> Prepare
     Prepared { width, height, opaque, binary, rgb: prgb, alpha: palpha, soft }
 }
 
-/// A w × h plane sampled bilinearly at output texel (ox, oy) of its SCALE×
-/// upscale (texel centres; wrapped or clamped per axis), as the GPU
-/// magnifies a texture.
-fn bilinear(plane: &[f32], w: usize, h: usize, wrap_u: bool, wrap_v: bool, ox: usize, oy: usize) -> f32 {
+/// A w × h plane sampled bilinearly at output texel (ox, oy) of its
+/// `scale`× upscale (texel centres; wrapped or clamped per axis), as the
+/// GPU magnifies a texture (also texture_fix's alpha).
+pub(crate) fn bilinear(plane: &[f32], (w, h): (usize, usize), (wrap_u, wrap_v): (bool, bool), scale: usize, (ox, oy): (usize, usize)) -> f32 {
     let axis = |o: usize, size: usize, wrap: bool| {
-        let t = (o as f32 + 0.5) / SCALE as f32 - 0.5;
+        let t = (o as f32 + 0.5) / scale as f32 - 0.5;
         let i = t.floor();
         (src_index(i as isize, size, wrap), src_index(i as isize + 1, size, wrap), t - i)
     };
@@ -153,7 +162,7 @@ pub fn finish(p: &Prepared, rgb: &[f32], alpha: Option<&[f32]>) -> Vec<u8> {
         let a = if p.opaque {
             1.0
         } else if let Some((soft, wrap_u, wrap_v)) = &p.soft {
-            bilinear(soft, p.width, p.height, *wrap_u, *wrap_v, i % ow, i / ow)
+            bilinear(soft, (p.width, p.height), (*wrap_u, *wrap_v), SCALE, (i % ow, i / ow))
         } else {
             let g = alpha.expect("alpha pass");
             let v = 0.299f32 * g[i] + 0.587f32 * g[plane + i] + 0.114f32 * g[2 * plane + i];
@@ -225,7 +234,7 @@ mod tests {
     #[test]
     fn soft_alpha_is_bilinear() {
         let ramp = [0.0f32, 1.0];
-        let row = |wrap: bool| (0..8).map(|x| bilinear(&ramp, 2, 1, wrap, true, x, 0)).collect::<Vec<_>>();
+        let row = |wrap: bool| (0..8).map(|x| bilinear(&ramp, (2, 1), (wrap, true), SCALE, (x, 0))).collect::<Vec<_>>();
         assert_eq!(row(false), [0.0, 0.0, 0.125, 0.375, 0.625, 0.875, 1.0, 1.0]);
         let wrapped = row(true);
         assert_eq!((wrapped[0], wrapped[7]), (0.375, 0.625));

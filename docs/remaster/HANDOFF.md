@@ -224,7 +224,7 @@ later. And effects look better mostly through their textures.
 - **Real dump sizes:** a G1 session dumps about 2,062 textures (11 MB); the HD
   generator saw 13,742 textures in total, mostly 16–64 px.
 
-### Planned tasks (tasks 1–2 done 2026-11-22; the rest not started)
+### Planned tasks (tasks 1–3 done 2026-11-22)
 1. **Default pack folder and one-step dump.** Done 2026-11-22 (the owner's
    choices: the folder beside the game, an F10 row;
    `docs/decisions/0009-texture-workflow.md`):
@@ -250,16 +250,17 @@ later. And effects look better mostly through their textures.
      magnification blends into the edge. The fix: give clear texels their
      kept neighbours' colour at load (as hd::prep's fill_clear), NATIVE and
      off in the baseline.
-3. **ChatGPT recipe plus a fix-up tool** (a `gdl_tools` subcommand, or a
-   small exe for Windows):
-   - Resize an AI image to an exact multiple of the original (e.g. 4×).
-   - Restore the original's alpha, upscaled: AI output loses cut-out masks.
-   - Optionally make wrapping textures seamless.
-   - Write a prompt recipe ("same layout, same colours, more detail") and
-     guidance on which textures suit AI (large floors, walls, character skins)
-     and which don't (tiny UI, effects).
-4. **First targets:** the playable characters and the Tower.
-5. **Test build 3,** then commit and push to `remaster`.
+3. **ChatGPT recipe plus a fix-up tool.** Done 2026-11-22 (the owner's
+   choice: a drop folder the game processes; decisions/0009 "Fix-up"):
+   `texture_work\` beside the game, its README.txt the recipe. An image
+   named after its texture is fitted at startup and on F5 (exact multiple,
+   the original's proportions and alpha, clear texels coloured) into
+   `texture_pack\`. Not done: making repeating textures seamless (the
+   recipe asks ChatGPT for it). Not yet tried with a real ChatGPT image.
+4. **First targets:** the playable characters and the Tower (the owner's
+   art; the tools are ready).
+5. **Test build 3.** The builds of a55909e and 81fa091 were installed on
+   the owner's PC (2026-11-22); the build with F5 and the fix-up is next.
 
 ## 8. Roadmap after textures (owner's priorities, my recommendation)
 
@@ -314,5 +315,5 @@ memory. The port stays the base.
 - [x] Check the upstream PR's status (`windows-sound-fix`):
       jeddhor/GauntletDLRedone#1, open, no comments or reviews on
       2026-11-22. Check again later.
-- [ ] Texture phase tasks 1–5 (§7).
+- [ ] Texture phase (§7): tasks 1–3 done 2026-11-22; the owner's art next.
 - [ ] Camera follow-ups (§3) as the owner asks.

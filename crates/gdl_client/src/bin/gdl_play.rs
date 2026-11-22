@@ -410,15 +410,27 @@ fn reload_textures(
     let line = if tp::pack_dir().is_none() && !tp::active() {
         "No texture pack in use (F10, Graphics: Texture pack folder)".to_string()
     } else {
+        let fixed = tp::pack_dir().map(|p| fix_texture_work(&p)).unwrap_or_default();
         let report = gdl_client::texture_reload::reload(&mut images);
         *reprepare = 2;
         if let Some(dump) = tp::dump_dir() {
             let _ = gdl_client::texture_browser::write(&dump, tp::pack_dir().as_deref());
         }
-        report.message()
+        if fixed.is_empty() { report.message() } else { format!("{fixed}; {}", report.message()) }
     };
     eprintln!("F5: {line}");
     notice.0 = Some((line, std::time::Instant::now()));
+}
+
+/// NATIVE (this fork, decisions/0009 "Fix-up"): the images waiting in
+/// texture_work fitted into `pack` (gdl_client::texture_fix; the originals
+/// from texture_dump beside the game). The on-screen part of the result
+/// ("" when nothing waited).
+fn fix_texture_work(pack: &Path) -> String {
+    use gdl_client::texture_pack as tp;
+    let (Some(work), Some(dump)) = (tp::default_work_dir(), tp::default_dump_dir()) else { return String::new() };
+    gdl_client::texture_fix::ensure_work_dir(&work);
+    gdl_client::texture_fix::process(&work, &dump, pack).message()
 }
 
 /// NATIVE (this fork): a package's kind in a texture dump's sources.tsv;
@@ -11733,6 +11745,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         gdl_client::texture_pack::ensure_pack_dir(&dir);
         Some(dir)
     });
+    // NATIVE (this fork, decisions/0009 "Fix-up"): images waiting in
+    // texture_work go into the pack before anything loads.
+    if let Some(pack) = pack.as_deref() {
+        let line = fix_texture_work(pack);
+        if !line.is_empty() {
+            eprintln!("texture_work: {line}");
+        }
+    }
     gdl_client::texture_pack::configure(pack);
     // A complete HD texture pack is in use from the start, front end
     // included (hd_textures_job generates a missing one).

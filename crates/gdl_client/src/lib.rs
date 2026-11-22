@@ -14,6 +14,7 @@ pub mod net;
 pub mod settings;
 pub mod texfilter;
 pub mod texture_browser;
+pub mod texture_fix;
 pub mod texture_pack;
 pub mod texture_reload;
 pub mod writeback;

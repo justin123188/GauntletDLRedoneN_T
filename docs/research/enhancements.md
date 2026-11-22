@@ -807,6 +807,15 @@ later. G1 check: 142 images replaced, then back to the originals, one
 reload each (frames 1.04 s and 0.14 s); simulation hashes unchanged. HUD
 images are not reloaded.
 
+texture_work beside the game (this fork, gdl_client::texture_fix,
+decisions/0009 "Fix-up") takes images made for a texture (ChatGPT's),
+named after it, at startup and on F5: an exact multiple of the original in
+its proportions (Catmull-Rom), the original's alpha upscaled bilinearly (a
+cut-out's thresholded), clear texels within four rings coloured from kept
+neighbours; the result goes into the pack. 134 stand-in images (1024²,
+no alpha) fitted at startup in 6.5 s on 4 threads; the foliage cut-outs
+stay intact in play.
+
 Effect sprites the HD pack keeps original show a dark rim when magnified
 (the owner's playtest, 2026-11-22: the Red Wizard's sparks, zoomed in):
 their clear texels are black, and bilinear filtering blends that black

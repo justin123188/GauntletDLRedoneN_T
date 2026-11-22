@@ -171,7 +171,7 @@ code { font-size: 11px; color: var(--accent); user-select: all; cursor: copy; }
 <body>
 <header>
 <h1>Saved textures <small>{COUNT} textures, {REPLACED} replaced</small></h1>
-<p>To replace a texture, make your own version of its picture and save it as a PNG with the same file name (click a name to select it, then copy) in the <b>texture_pack</b> folder beside the game. Any size up to 4096&times;4096 works; keep the proportions. Textures that repeat should join up seamlessly at their edges. The game reads the folder when it starts; press F5 in play to reload it.</p>
+<p>To replace a texture, make your own version of its picture and save it as a PNG with the same file name (click a name to select it, then copy) in the <b>texture_pack</b> folder beside the game. Any size up to 4096&times;4096 works; keep the proportions. Textures that repeat should join up seamlessly at their edges. The game reads the folder when it starts; press F5 in play to reload it. To make one with ChatGPT, see <b>texture_work\README.txt</b> beside the game.</p>
 <input id="q" type="search" placeholder="Search labels or file names (for example WIZ or FLOOR)" autofocus>
 </header>
 <main>

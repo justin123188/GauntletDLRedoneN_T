@@ -97,4 +97,45 @@ per-update simulation hashes equal the reference. The first reload's frame
 took 1.04 s (142 textures read and their chains built at once), the second
 0.14 s. Not checked: F5 from the keyboard in the owner's game.
 
-Not done yet: the fix-up tool for AI images and the recipe.
+## Fix-up: images made with ChatGPT (2026-11-22)
+
+The owner's choice (over a separate drag-and-drop tool): a drop folder the
+game processes itself, so there is nothing extra to run.
+
+- **texture_work\ beside the game** (gdl_client::texture_fix), made at
+  startup with README.txt: the ChatGPT recipe (save textures, find one on
+  index.html, the prompt, the extra lines for repeating and see-through
+  textures, where to save the image, which textures suit AI). An image
+  named after its texture (`<name>.png`; words after the name allowed, as
+  ChatGPT's downloads get renamed) is fitted at startup, before anything
+  loads, and on F5, before the reload; then it moves to texture_work\done.
+- **The fit.** The original from texture_dump (`<name>.png`) and its record
+  flags (index.tsv). Size: an exact multiple of the original, the image's
+  own scale rounded (1..8, at most 2048 texels a side), in the original's
+  proportions (ChatGPT's square or 3:2 images are squeezed back), resampled
+  with a Catmull-Rom kernel widened when shrinking. Alpha: the original's,
+  upscaled bilinearly (wrapped or clamped like the record), a cut-out's
+  thresholded at half, an opaque original opaque: an AI image's own alpha
+  is ignored (cut-out masks do not survive it, and the geometry expects the
+  original's). Clear texels within four rings of kept ones take the kept
+  neighbours' colour (hd::prep fill_clear_rings; a full fill at fitted
+  sizes took about a second per image and does not reach a filtered sample
+  past the first ring). PNG only; up to 4 images at once.
+- **Not done:** making repeating textures seamless (the recipe asks
+  ChatGPT for it); HUD images still need a restart after F5.
+
+Verification (2026-11-22, the owner's PC, the actual disc's import, a
+scratch copy, isolated APPDATA): unit tests (names, scales, resampling,
+the mask restored and the clear texels' colour, the folder pass with a
+missing original and a non-PNG). No ChatGPT image: 134 stand-ins for G1's
+level textures (each blown up to a 1024×1024 square, no alpha channel,
+red and blue swapped) in texture_work at startup and 2 for the barrels
+dropped in during play: "134 new from texture_work" at startup, "2 new
+from texture_work; Textures reloaded: 2 replaced" on F5; screenshots show
+the swapped level with its foliage cut-outs intact and then the barrels;
+the fitted files have the originals' proportions (CORN_SIDE 64×128 →
+512×1024) and masks. Startup with 134 waiting images: 9.1 s to the first
+update (2.6 s with none; 128.5 s before the fill was bounded). 40
+regenerated HD textures are byte-identical to the p2 pack (hd::prep's
+fill_clear unchanged). The simulation hashes equal the reference. Not
+checked: a real ChatGPT image, and the owner's playtest.
