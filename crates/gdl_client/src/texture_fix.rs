@@ -73,6 +73,9 @@ and clothes, item pictures. Less good: tiny textures (8 or 16 pixels), text\r
 and HUD icons, effects (fire, sparks, glows) and animation frames (every\r
 frame would come out different).\r
 \r
+Sharper text: the fonts folder here takes a font file for any of the\r
+game's fonts (see the README.txt in it).\r
+\r
 To undo a texture: delete its file from texture_pack and press F5.\r
 ";
 

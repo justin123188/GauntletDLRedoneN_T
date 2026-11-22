@@ -10,7 +10,9 @@ NATIVE (this fork, decisions/0011): blits and messages carry a
 presentation-only `panel` tag (hud::PanelPart: the box a panel blit, its
 text or a help box over it belongs to) for gdl_client::hud_layout's HUD
 size, edge and empty-panel options. Nothing in the simulation reads it;
-with the original layout the panels draw as described here.
+with the original layout the panels draw as described here. A font's
+page can be drawn from a font file (gdl_client::font_page,
+decisions/0013): 8HIFONTS holds ñ at code 0x5e and Ñ at 0x7e.
 
 ## Blit layer
 

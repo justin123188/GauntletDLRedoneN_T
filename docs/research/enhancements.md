@@ -839,6 +839,12 @@ reload each (frames 1.04 s and 0.14 s); simulation hashes unchanged. HUD
 pictures whose file changed are decoded again (since 2026-11-22; HUD z
 masks keep the disc's texels).
 
+Fonts (this fork, gdl_client::font_page, decisions/0013): a font file in
+texture_work\fonts named after a HUD font's texture (8HIFONTS.ttf) is
+drawn into that font's page, every glyph in its cell at 4×, at startup
+and on F5; removing it restores the original. Checked with six Windows
+serif fonts as 8HIFONTS in G1 ("LV 1"), and an F5 round trip.
+
 texture_work beside the game (this fork, gdl_client::texture_fix,
 decisions/0009 "Fix-up") takes images made for a texture (ChatGPT's),
 named after it, at startup and on F5: an exact multiple of the original in

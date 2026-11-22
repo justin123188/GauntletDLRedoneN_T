@@ -242,10 +242,9 @@ later. And effects look better mostly through their textures.
    HUD pictures too since 2026-11-22 (the owner is redrawing the pickup
    notices). A big reload costs a hitch (142 textures: 1 s); reading and
    chaining could move to worker threads.
-   - The owner also wants a sharper font for numbers such as the crystal
-     count "1/100" (font 1, 8HIFONTS, 128×128 in STATIC). The glyph cells
-     are known from the FNT files, so a helper could draw a whole font page
-     from a TrueType font at the right places (not started).
+   - Sharper fonts: done 2026-11-22 (decisions/0013). A font file in
+     `texture_work\fonts` named after a font's texture (8HIFONTS.ttf: the
+     crystal count "1/100" and "LV 1") is drawn into that font's page.
    - Also found and fixed on the way: soft glows sharpened by the HD
      upscaler (decisions/0010, PROCESSING 2), an error box when the
      game quit during HD generation, and the yellow Wizard's magenta hand

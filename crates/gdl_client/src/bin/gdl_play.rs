@@ -402,7 +402,7 @@ fn reload_textures(
     keys: Res<ButtonInput<KeyCode>>,
     overlay: Res<gdl_client::enhance::Overlay>,
     (mut images, mut materials): (ResMut<Assets<Image>>, ResMut<Assets<gdl_client::GsMaterial>>),
-    (mut notice, mut hud_sets): (ResMut<ScreenNotice>, ResMut<HudSets>),
+    (mut notice, mut hud_sets, front): (ResMut<ScreenNotice>, ResMut<HudSets>, Res<Front>),
     mut reprepare: Local<u8>,
     (sim, harness, mut acted): (Option<Res<Sim>>, Res<TestHarness>, Local<Option<u64>>),
 ) {
@@ -428,6 +428,8 @@ fn reload_textures(
         "No texture pack in use (F10, Graphics: Texture pack folder)".to_string()
     } else {
         let fixed = tp::pack_dir().map(|p| fix_texture_work(&p)).unwrap_or_default();
+        // NATIVE (this fork, decisions/0013): font pages first (HUD images).
+        let fonts = make_font_pages(&front);
         let mut report = gdl_client::texture_reload::reload(&mut images);
         // HUD pictures whose file changed are decoded again when drawn.
         let sets = &mut *hud_sets;
@@ -445,7 +447,7 @@ fn reload_textures(
         if let Some(dump) = tp::dump_dir() {
             let _ = gdl_client::texture_browser::write(&dump, tp::pack_dir().as_deref());
         }
-        if fixed.is_empty() { report.message() } else { format!("{fixed}; {}", report.message()) }
+        [fixed, fonts, report.message()].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("; ")
     };
     eprintln!("F5: {line}");
     notice.0 = Some((line, std::time::Instant::now()));
@@ -460,6 +462,63 @@ fn fix_texture_work(pack: &Path) -> String {
     let (Some(work), Some(dump)) = (tp::default_work_dir(), tp::default_dump_dir()) else { return String::new() };
     gdl_client::texture_fix::ensure_work_dir(&work);
     gdl_client::texture_fix::process(&work, &dump, pack).message()
+}
+
+/// NATIVE (this fork, decisions/0013): font pages drawn from the font files
+/// in texture_work\fonts (gdl_client::font_page) for the front HUD's fonts,
+/// into the pack; the folder's README lists the fonts. The on-screen part
+/// of the result ("" when nothing changed).
+fn make_font_pages(front: &Front) -> String {
+    use gdl_client::texture_pack as tp;
+    let (Some(pack), Some(work)) = (tp::pack_dir(), tp::default_work_dir()) else { return String::new() };
+    let dir = work.join("fonts");
+    let textures = font_textures(front);
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let readme = gdl_client::font_page::readme(&textures);
+        let path = dir.join("README.txt");
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(readme.as_str()) {
+            let _ = std::fs::write(path, readme);
+        }
+    }
+    gdl_client::font_page::process(&dir, &pack, &textures).message()
+}
+
+/// Every texture page of the front HUD's fonts (font_desc order; their
+/// textures in STATIC, TITLE or SELECT), each once.
+fn font_textures(front: &Front) -> Vec<gdl_client::font_page::FontTexture> {
+    let hud = &front.ui_hud;
+    let mut out: Vec<gdl_client::font_page::FontTexture> = Vec::new();
+    for f in hud.fonts.iter().flatten() {
+        let Some(tex) = f.tex else { continue };
+        let Some(set) = hud.textures.get(tex.set as usize) else { continue };
+        let pkg = match set.name.as_str() {
+            "STATIC" => &front.static_pkg,
+            "TITLE" => &front.title_pkg,
+            "SELECT" => &front.select_pkg,
+            _ => continue,
+        };
+        let Some(label) = set.records.get(tex.index as usize).map(|r| r.label.to_ascii_uppercase()) else { continue };
+        // MBNewFont's pages: glyph ordinals per_page at a time, each page
+        // the next record.
+        for (page, glyphs) in f.font.glyphs.chunks(f.per_page.max(1) as usize).enumerate() {
+            let index = tex.index as usize + page;
+            let (Some(info), Some(rgba)) = (set.records.get(index), gdl_client::hud_rgba(&pkg.objects, &pkg.table, &pkg.textures, index)) else { continue };
+            let name = gdl_client::texture_pack::name(info.width, info.height, &rgba);
+            if out.iter().any(|t| t.name == name) {
+                continue;
+            }
+            out.push(gdl_client::font_page::FontTexture {
+                label: label.clone(),
+                name,
+                glyphs: glyphs.to_vec(),
+                height: f.font.height,
+                def: (u32::from(info.def_width), u32::from(info.def_height)),
+                size: (u32::from(info.width), u32::from(info.height)),
+                rgba,
+            });
+        }
+    }
+    out
 }
 
 /// NATIVE (this fork): a package's kind in a texture dump's sources.tsv;
@@ -12097,7 +12156,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         .init_resource::<FrameLayout>()
         .insert_resource(SettingsDir(settings_dir))
         .insert_resource(ConfigPath(config_abs))
-        .insert_resource(front)
+        .insert_resource({
+            // NATIVE (this fork, decisions/0013): font pages before the HUD
+            // draws.
+            let line = make_font_pages(&front);
+            if !line.is_empty() {
+                eprintln!("texture_work fonts: {line}");
+            }
+            front
+        })
         .insert_resource(Screen::Front)
         .insert_resource(presentation)
         .init_resource::<Libraries>()

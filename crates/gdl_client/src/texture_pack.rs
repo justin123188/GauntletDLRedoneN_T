@@ -235,7 +235,7 @@ fn dump(dir: &Path, stem: &str, width: u16, height: u16, rgba: &[u8], label: &st
     }
 }
 
-fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     let data: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2], (u16::from(p[3]) * 2).min(255) as u8]).collect();
     let tmp = path.with_extension("png.tmp");
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(std::fs::File::create(&tmp)?), width, height);

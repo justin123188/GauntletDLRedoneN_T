@@ -6,6 +6,7 @@ pub mod audio;
 pub mod catalog;
 pub mod controls;
 pub mod enhance;
+pub mod font_page;
 pub mod glyphs;
 pub mod hd;
 pub mod hud_layout;

@@ -14,6 +14,9 @@ png.workspace = true
 wgpu.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# NATIVE (this fork, decisions/0013): glyph outlines for font_page; the
+# version cosmic-text (bevy_text) already brings in.
+swash = "=0.2.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "=0.9.1"
