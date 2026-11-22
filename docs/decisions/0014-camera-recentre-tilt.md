@@ -48,4 +48,5 @@ steeper; turned and then recentred by a quick press, and turned and
 zoomed out and then held, the level's geometry is where it is without
 any input (the enemies, which kept moving, differ). Simulation hashes
 over 600 updates of the G1 walk equal the reference with the free camera
-and with GDL_BASELINE=1. Not checked: the owner's playtest.
+and with GDL_BASELINE=1. The owner's playtest (2026-11-22, the build of
+5b4d6b9, Xbox One controller): "that's pretty good!".

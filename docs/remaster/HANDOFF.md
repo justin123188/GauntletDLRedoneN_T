@@ -332,8 +332,8 @@ memory. The port stays the base.
       "Everything looks good so far".
 - [x] Controller buttons (§8, decisions/0012): the owner uses them with an
       Xbox One controller (2026-11-22).
-- [ ] Camera recentre and tilt (decisions/0014): built 2026-11-22; the
-      owner's playtest next.
+- [x] Camera recentre and tilt (decisions/0014): the owner's playtest
+      2026-11-22, "that's pretty good!".
 - [x] Sharper fonts (decisions/0013): the owner's playtest 2026-11-22 with
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
 - [ ] Camera follow-ups (§3) as the owner asks.
