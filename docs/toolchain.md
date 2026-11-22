@@ -141,6 +141,70 @@ G1 walk. Not tested: a Windows installation, WASAPI output (a test would
 play on the host's speakers), DirectX 12.
 
 
+## Native Windows build (this fork, 2026-11-22)
+
+The first local session built gdl_play natively on the owner's PC (Windows
+10 Pro 22H2, 10.0.19045; NVIDIA GeForce RTX 3060, driver 596.49, Vulkan)
+with the GNU target of the cross-build above, not MSVC: the same kind of
+executable as upstream's Windows packages and this fork's test builds 1 and
+2, and no Visual Studio. With rustup's default host x86_64-pc-windows-gnu,
+build scripts and proc macros are linked by the same MinGW tools. The one
+C/assembly source is blake3's (a bevy_asset dependency); MSYS2's MINGW64
+GCC assembles it and links.
+
+| Component | Exact observed version / identity |
+| --- | --- |
+| rustup | 1.29.3 (edbc831ce 2026-11-02); rustup-init.exe from static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/, SHA-256 f6289656ce42e1099f3cbc6f10ef6321dfde54773faf599dd36fd3b1f07d9103 (equal to its published .sha256), run with `-y --default-host x86_64-pc-windows-gnu --default-toolchain 1.93.1 --profile minimal` |
+| Rust / Cargo | 1.93.1-x86_64-pc-windows-gnu: rustc 01f6ddf75, Cargo 083ac5135 (the Linux host's commits), LLVM 21.1.8; rustfmt and clippy from rust-toolchain.toml |
+| MSYS2 | installer 2026-09-27 (winget MSYS2.MSYS2; winget checked its hash), C:\msys64; msys2-runtime 3.6.12-1, pacman 6.1.0-30 |
+| MinGW-w64 (MSYS2 MINGW64: msvcrt, as the cross-build) | mingw-w64-x86_64-gcc 16.2.0-7, binutils 2.47-5, crt and winpthreads 14.0.0.r598.ge3d18511f-1 |
+
+The cross-build's GCC is 13.2.0; MSYS2 offers only its current release.
+GCC assembles blake3 and links (libgcc's static parts); the simulation's
+arithmetic is Rust (gdl_core::libm, numeric.rs), so the difference does not
+reach it, and the comparison below found none.
+
+Build (tools/windows/build-native.ps1 does this after checking the HD
+weights' SHA-256; `-Tests` adds the unit tests):
+
+```powershell
+$env:PATH = "C:\msys64\mingw64\bin;$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo build --release --locked -p gdl_client --bin gdl_play
+```
+
+A cold release build took 18 minutes; gdl_play.exe is 87,576,064 bytes. Its
+imported DLLs (objdump -p) are exactly test build 2's: system DLLs and
+msvcrt.dll, the MinGW runtime static. The only compiler warning is in the
+vendored wgpu-hal (dx12/device.rs: a value assigned and never read).
+
+Checked on the actual disc's import (the owner's installation, only read)
+with tools/windows/sim-hashes.ps1: GDL_TEST_AUTOSTART in G1,
+tools/windows/g1-walk-dpad.json on port 0 (d-pad walking in four directions
+and diagonals; buttons 8-0xd), GDL_EXIT_AFTER=600, no audio, APPDATA
+redirected to a scratch folder (the harness's new character is saved there,
+not in the player's saves). The 600 per-update simulation hashes of this
+build and of test build 2 (the cloud cross-build of 00b5f30; only documents
+changed since) are identical with GDL_BASELINE=1 and with this fork's
+defaults (free camera on); repeated runs, and runs while the CPU was busy
+compiling, give the same list (last hash 45640884d086e424...). GDL_FRAME_LOG
+shows the player walking from update 102. With the free camera on and no
+right-stick input the list equals the baseline's.
+
+Not covered: the free camera's turning and zoom. The scripted port is a pad
+without analog sticks (PadStatus analog and has_stick false), so only the
+d-pad entries 0-3 and the buttons count; stick entries 4-7 and 0xe-0x11 are
+ignored (a first script that walked with the left stick moved nobody).
+Scripting the right stick needs a harness change (analog entries).
+GDL_FRAME_LOG's shown positions differ between the two settings because
+interpolation (on by default here, off in the baseline) blends the drawn
+scene between updates; the simulation does not differ.
+
+Unit tests on this host: `cargo test --locked -p gdl_core` 99 passed (the
+source has 100; save.rs a_full_disk_keeps_the_previous_save is
+`#[cfg(target_os = "linux")]`), `cargo test --locked -p gdl_client --lib`
+46 passed.
+
+
 ## Installer and packages (2026-10-28, M21)
 
 The installer (`installer/`, docs/decisions/0005-installer.md) is C++17 on

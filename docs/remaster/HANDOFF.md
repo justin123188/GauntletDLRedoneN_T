@@ -81,9 +81,12 @@ Notes: `docs/research/audio.md`, "Windows output: any device format".
   the cpal stream and reopens it on error or when the default device changes.
   Notes go to **`remaster-log.txt`** beside `gdl_play.exe` (named
   `audio-log.txt` on the upstream branch).
-- **Status:** the owner confirmed sound now works. They have not yet sent
-  their `remaster-log.txt`, so which device format caused the silence is
-  unconfirmed. Ask for it: it strengthens the upstream PR.
+- **Status:** the owner confirmed sound now works. Their `remaster-log.txt`
+  (read on their PC by the first local session, 2026-11-22) shows the cause:
+  the default device, "Speakers (Creative SB X-Fi)", offers only 4-channel
+  modes (I32 and F32, 48 kHz) and no stereo mode at all; the build plays
+  4 ch F32. The upstream PR's text says 5.1/7.1; a 4.0 device is one more
+  case (a comment there only with the owner's go-ahead).
 
 ### remaster-log.txt
 `gdl_client::audio::note()` writes a line to it (Windows only). Besides
@@ -99,13 +102,15 @@ textures were being generated. Test build 2 shipped `run-with-frame-log.bat`
 
 ## 4. The owner's PC and installation
 
-- **Installed game:** usually `C:\Users\<owner>\GauntletDarkLegacy\`, holding
+- **Installed game:** the installer's default is
+  `C:\Users\<owner>\GauntletDarkLegacy\`; the owner's is elsewhere (local
+  sessions keep the path in their memory, not in this public repo). It holds
   `gdl_play.exe`, `gdl_import.exe` and `data\` (`data\config.json` plus the
   imported disc files).
 - **Test builds:** a new `gdl_play.exe` drops into that folder. Keep the
-  original as `gdl_play-1.3.6.exe`. Installed builds read
-  `data\config.json` next to the exe (`installed_config()`); the working
-  directory becomes `data\`.
+  original as a backup (the owner's is named `gdl_playBU.exe`). Installed
+  builds read `data\config.json` next to the exe (`installed_config()`); the
+  working directory becomes `data\`.
 - **Saves and settings:** `%APPDATA%\gdl-native\SLUS-20047\saves\`, with
   `settings.json` there. A relative `texture_pack` path in settings resolves
   against the working directory, i.e. `data\`.
@@ -115,36 +120,51 @@ textures were being generated. Test build 2 shipped `run-with-frame-log.bat`
   dumps, or packs derived from disc textures. The fork is **public**. Upstream
   keeps such things in the ignored `private/` folder.
 
-## 5. Building on Windows (native build not yet tried)
+## 5. Building on Windows (native build works since 2026-11-22)
 
-Upstream builds the Windows exe by cross-compiling from Linux
-(`docs/toolchain.md`, "Windows build"; target `x86_64-pc-windows-gnu`). A
-native Windows build has not been tried. First task in a local session: get it
-working.
+The first local session built and checked the game natively on the owner's
+PC with the GNU target that upstream cross-builds (`x86_64-pc-windows-gnu`),
+not MSVC: no Visual Studio, and the same kind of exe as upstream's Windows
+packages. Versions and the check: `docs/toolchain.md`, "Native Windows
+build".
 
-1. **Rust:** install rustup. `rust-toolchain.toml` pins 1.93.1 and is picked
-   up automatically.
-2. **Linker:** MSVC is easiest (Visual Studio Build Tools, "Desktop development
-   with C++"). If MSVC fails, use the GNU target with MSYS2's mingw-w64:
-   `rustup target add x86_64-pc-windows-gnu`, then build with
-   `--target x86_64-pc-windows-gnu`.
+1. **Rust:** `rustup-init.exe` for the GNU host, run with
+   `-y --default-host x86_64-pc-windows-gnu --default-toolchain 1.93.1 --profile minimal`
+   (an MSVC-host rustup would still want Visual Studio's linker for build
+   scripts). `rust-toolchain.toml` pins 1.93.1 and adds rustfmt and clippy.
+2. **C compiler and linker:** MSYS2 (`winget install MSYS2.MSYS2`), then in
+   its shell `pacman -Syu` (twice) and `pacman -S mingw-w64-x86_64-gcc`.
+   MINGW64, not UCRT64: Rust's GNU standard library uses msvcrt. Only
+   blake3 (a bevy_asset dependency) compiles C/assembly.
 3. **HD upscaler weights:** `crates/gdl_client/assets/hd/realesr-general-x4v3-dn05.bin`
-   is required at compile time (`include_bytes!`) but git-ignored (`*.bin`).
-   The cloud session sent the owner this exact file (SHA-256
-   `e6626f1f5a94c46423826e44e60a6efe4b92d918aee97877c246fe7c2259ef4b`,
-   4,853,208 bytes); put it in that folder. To regenerate it instead
-   (Python 3 with numpy):
+   is required at compile time (`include_bytes!`) but git-ignored (`*.bin`):
+   SHA-256 `e6626f1f5a94c46423826e44e60a6efe4b92d918aee97877c246fe7c2259ef4b`,
+   4,853,208 bytes. Every gdl_play.exe built with it carries it verbatim:
+   the first local session cut it out of test build 2 (4,853,208 bytes from
+   the first `GDLSRVGG` header: version 1, 32 convolutions, 64 features,
+   scale 4) and checked the hash. To regenerate it instead (Python 3 with
+   numpy):
    - Download `realesr-general-x4v3.pth` (SHA-256 `8dc7edb9…96292`) and
      `realesr-general-wdn-x4v3.pth` (`1641f8c4…69dca`) from
      `https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/`.
    - Run `python tools/python/hd_weights.py <dir with both> crates/gdl_client/assets/hd/realesr-general-x4v3-dn05.bin`.
    - Check the hash against `realesr-general-x4v3-dn05.json`.
-4. **Build:** `cargo build --release --locked -p gdl_client --bin gdl_play`,
-   then copy `target\release\gdl_play.exe` into the install folder (back up
-   first).
-5. **Tests:** `cargo test --locked -p gdl_core` (100 passing on 2026-11-22)
-   and `cargo test --locked -p gdl_client --lib` (46 passing).
-6. **Linux-only parts:** `alsa`. The installer (`installer/`, Qt) is separate
+4. **Build:** `tools\windows\build-native.ps1` checks the weights, sets PATH
+   for itself and builds `target\release\gdl_play.exe` (`-Tests` also runs
+   the tests). A cold build took 18 minutes. Copy the exe into the install
+   folder (back up first).
+5. **Tests:** `cargo test --locked -p gdl_core` (99 passing on Windows; the
+   100th, `save.rs` `a_full_disk_keeps_the_previous_save`, is Linux-only) and
+   `cargo test --locked -p gdl_client --lib` (46 passing).
+6. **Simulation check:** `tools\windows\sim-hashes.ps1 -Exe … -Config
+   <install>\data\config.json -Out FILE [-Baseline]` runs a build in G1 with
+   a scripted pad (`tools\windows\g1-walk-dpad.json`) and writes the
+   simulation hash after every update, with saves and settings in a scratch
+   folder. Two builds, or a feature on and off, agree when their files are
+   equal. Use it for every remaster change that must keep the original mode
+   bit-identical. The scripted pad has no analog sticks, so the free
+   camera's turning cannot be scripted yet (a harness change).
+7. **Linux-only parts:** `alsa`. The installer (`installer/`, Qt) is separate
    and not needed for development.
 
 ## 6. Diagnostics and test harness (let the local session see for itself)
@@ -274,10 +294,13 @@ memory. The port stays the base.
 
 ## 10. Open items checklist
 
-- [ ] Native Windows build works (§5).
-- [ ] Ask the owner for `remaster-log.txt`, and check which device format
-      caused the silence. Mention it on the upstream PR if useful (owner
+- [x] Native Windows build works (§5): GNU toolchain, 2026-11-22; the
+      same simulation hashes as test build 2.
+- [x] Read `remaster-log.txt` (2026-11-22): a 4-channel device with no
+      stereo mode (§3). Mention it on the upstream PR if useful (owner
       approves any comment).
-- [ ] Check the upstream PR's status (`windows-sound-fix`).
+- [x] Check the upstream PR's status (`windows-sound-fix`):
+      jeddhor/GauntletDLRedone#1, open, no comments or reviews on
+      2026-11-22. Check again later.
 - [ ] Texture phase tasks 1–5 (§7).
 - [ ] Camera follow-ups (§3) as the owner asks.

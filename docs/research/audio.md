@@ -417,14 +417,17 @@ demand). Sound items follow their +0xf8 world node (process_sound_item).
 Release 1.3.6 opened the default WASAPI device only in a stereo f32 mode.
 WASAPI's shared mode offers only the device's own channel count (cpal
 0.15.3 wasapi/device.rs supported_formats: the mix format's channels), so a
-device set up for 5.1 or 7.1 had no such mode and the game was silent with
-no message (the status went to stdout, which a windows-subsystem program
-does not have). start_cpal now takes the device's default format when no
+device set up for more than two channels (4.0, 5.1, 7.1) had no such mode
+and the game was silent with no message (the status went to stdout, which
+a windows-subsystem program does not have). start_cpal now takes the
+device's default format when no
 stereo f32 mode is offered: any channel count (the mix on front left/right,
 mono their average, the rest silent) and any cpal sample format. A thread
 owns the stream and reopens it on a stream error or when the default output
 device changes. remaster-log.txt beside gdl_play.exe records the device, its
 formats, the choice and errors. Stereo f32 devices get the same samples as
 before. Checked: Windows cross-build; the owner's Windows PC, silent with
-1.3.6, plays sound with this build (playtest 2026-11-22; the device's
-format not yet read from its remaster-log.txt).
+1.3.6, plays sound with this build (playtest 2026-11-22). Its remaster-log.txt
+(read on that PC, 2026-11-22) names the cause: the default device
+"Speakers (Creative SB X-Fi)" offers only 4 ch I32 and 4 ch F32 at
+48000 Hz, no stereo mode at all; this build plays 4 ch F32 48000 Hz.
