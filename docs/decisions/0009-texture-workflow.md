@@ -74,9 +74,15 @@ looks ok".
   later (texfilter's live switch). The result is shown for 4 s where the
   frame rate is ("Textures reloaded: 3 replaced"); a saving texture_dump's
   index.html is written again.
+- **HUD images** (since 2026-11-22, the owner's request while redrawing
+  the pickup notices): gdl_play's HudSets decodes each HUD picture when it
+  is first drawn and keeps its name and replacement file; F5 drops those
+  whose file changed (texture_reload::changed_files) and they are decoded
+  again with the new file on the next frame. Counted in the message. HUD
+  z masks always keep the disc's texels.
 - **Limits.** Texture-modifier targets keep copying their frames (the
-  frames are reloaded). HUD images and lightmaps are not reloaded (the next
-  start). A texture replaced when its level loaded was never in memory as
+  frames are reloaded). Lightmaps are not reloaded (the next start). A
+  texture replaced when its level loaded was never in memory as
   the original: removing its file takes effect at the next level. A
   replacement whose alpha class (opaque, cut-out, blended) differs from the
   original's keeps the material's until the level loads again (counted in
@@ -96,6 +102,14 @@ after the first reload and the originals after the second; the 600
 per-update simulation hashes equal the reference. The first reload's frame
 took 1.04 s (142 textures read and their chains built at once), the second
 0.14 s. Not checked: F5 from the keyboard in the owner's game.
+
+HUD images (2026-11-22, the same setup): a unit test (a new, a rewritten,
+a removed and an unchanged file). A G1 TEST run at 1600x900 with reloads
+at updates 300 and 600: a blue copy of COIN (the panel's gold coin) put
+in texture_pack before the first, removed before the second; the game
+reported "2 replaced" and "2 back to the original" (two HUD images share
+the coin's texels) and frames 200, 900 and 1700 show the gold coin, the
+blue one and the gold one again. Simulation hashes equal the reference.
 
 ## Fix-up: images made with ChatGPT (2026-11-22)
 
@@ -122,7 +136,7 @@ game processes itself, so there is nothing extra to run.
   sizes took about a second per image and does not reach a filtered sample
   past the first ring). PNG only; up to 4 images at once.
 - **Not done:** making repeating textures seamless (the recipe asks
-  ChatGPT for it); HUD images still need a restart after F5.
+  ChatGPT for it).
 
 Verification (2026-11-22, the owner's PC, the actual disc's import, a
 scratch copy, isolated APPDATA): unit tests (names, scales, resampling,

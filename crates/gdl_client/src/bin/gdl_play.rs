@@ -402,7 +402,7 @@ fn reload_textures(
     keys: Res<ButtonInput<KeyCode>>,
     overlay: Res<gdl_client::enhance::Overlay>,
     (mut images, mut materials): (ResMut<Assets<Image>>, ResMut<Assets<gdl_client::GsMaterial>>),
-    mut notice: ResMut<ScreenNotice>,
+    (mut notice, mut hud_sets): (ResMut<ScreenNotice>, ResMut<HudSets>),
     mut reprepare: Local<u8>,
     (sim, harness, mut acted): (Option<Res<Sim>>, Res<TestHarness>, Local<Option<u64>>),
 ) {
@@ -428,7 +428,19 @@ fn reload_textures(
         "No texture pack in use (F10, Graphics: Texture pack folder)".to_string()
     } else {
         let fixed = tp::pack_dir().map(|p| fix_texture_work(&p)).unwrap_or_default();
-        let report = gdl_client::texture_reload::reload(&mut images);
+        let mut report = gdl_client::texture_reload::reload(&mut images);
+        // HUD pictures whose file changed are decoded again when drawn.
+        let sets = &mut *hud_sets;
+        for (k, file) in gdl_client::texture_reload::changed_files(&sets.names, &tp::find) {
+            sets.images.remove(&k);
+            sets.xbox.remove(&k);
+            sets.names.remove(&k);
+            if file {
+                report.replaced += 1;
+            } else {
+                report.restored += 1;
+            }
+        }
         *reprepare = 2;
         if let Some(dump) = tp::dump_dir() {
             let _ = gdl_client::texture_browser::write(&dump, tp::pack_dir().as_deref());
@@ -4338,6 +4350,9 @@ struct HudSets {
     /// NATIVE ENHANCEMENT (button prompts): the Xbox variants of the
     /// face-button prompts among `images` (gdl_client::glyphs).
     xbox: HashMap<(u16, u16), Handle<Image>>,
+    /// NATIVE (this fork, F5): each of `images`' texture name and the
+    /// replacement file it was decoded with (texture_reload::changed_files).
+    names: HashMap<(u16, u16), (String, Option<gdl_client::texture_reload::Applied>)>,
 }
 
 /// NATIVE ENHANCEMENT (button prompts): the prompts' style this frame
@@ -9076,6 +9091,7 @@ fn init_hud(game: &mut Game, sources: &Sources, session: &Session, front: &Front
     sets.images.clear();
     sets.masks.clear();
     sets.xbox.clear();
+    sets.names.clear();
 }
 
 /// One ScrollMessageBox loop pass per elapsed vblank batch (wall time at
@@ -9738,6 +9754,14 @@ fn present_hud(
             };
             gdl_client::texture_pack::set_source("hud", &set_name);
             let decoded = pkg.and_then(|pkg| Some((pkg, gdl_client::hud_image(&pkg.objects, &pkg.table, &pkg.textures, t.index as usize, !mask)?)));
+            // NATIVE (this fork, F5): the name and file, for reload_textures.
+            let decoded = decoded.map(|(pkg, (im, name))| {
+                if !mask {
+                    let applied = gdl_client::texture_reload::applied(&name);
+                    sets.names.insert(key, (name, applied));
+                }
+                (pkg, im)
+            });
             // NATIVE ENHANCEMENT (button prompts): BUTTON_X/O/SQ/TRI's
             // Xbox letters beside the original.
             if !mask

@@ -827,7 +827,8 @@ swaps changed, new and removed replacements of the base textures
 materials_for made, in place, and prepares the materials again two frames
 later. G1 check: 142 images replaced, then back to the originals, one
 reload each (frames 1.04 s and 0.14 s); simulation hashes unchanged. HUD
-images are not reloaded.
+pictures whose file changed are decoded again (since 2026-11-22; HUD z
+masks keep the disc's texels).
 
 texture_work beside the game (this fork, gdl_client::texture_fix,
 decisions/0009 "Fix-up") takes images made for a texture (ChatGPT's),

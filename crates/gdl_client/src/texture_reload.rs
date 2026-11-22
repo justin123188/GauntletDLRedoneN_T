@@ -10,8 +10,13 @@
 //! chain and sampler follow the new level count, and gdl_play prepares the
 //! materials again two frames later (as texfilter's live switch).
 //!
+//! HUD images (gdl_play's HudSets decodes each when first drawn) are
+//! reloaded by dropping those whose file changed (`changed_files`): they
+//! are decoded again with the new file.
+//!
 //! Not reloaded: texture-modifier targets (their texels are a frame's
-//! copy; the frames themselves are reloaded), HUD images and lightmaps. A
+//! copy; the frames themselves are reloaded), HUD z masks (always the
+//! disc's) and lightmaps. A
 //! texture replaced when its level loaded cannot go back to the original
 //! (it was never in memory): that waits for the next level. A replacement
 //! whose alpha class (opaque, cut-out, blended) differs from the one the
@@ -119,6 +124,25 @@ pub fn reload(images: &mut Assets<Image>) -> Report {
     }
     texfilter::bump_generation();
     report
+}
+
+/// The replacement file a texture name has now (the user's pack, then the
+/// generated HD pack), as `changed_files` compares it.
+pub fn applied(name: &str) -> Option<Applied> {
+    crate::texture_pack::find(name).and_then(|p| Applied::of(&p))
+}
+
+/// HUD images: of `entries` (key, texture name, the file applied when it
+/// was decoded), those whose file is another now (another path, one
+/// written since, or none), each with whether a file replaces it now.
+pub fn changed_files<'a, K: Copy + 'a>(entries: impl IntoIterator<Item = (&'a K, &'a (String, Option<Applied>))>, find: &dyn Fn(&str) -> Option<PathBuf>) -> Vec<(K, bool)> {
+    entries
+        .into_iter()
+        .filter_map(|(k, (name, was))| {
+            let now = find(name).and_then(|p| Applied::of(&p));
+            (now != *was).then_some((*k, now.is_some()))
+        })
+        .collect()
 }
 
 /// The alpha class materials_for gives level 0 (0 opaque, 1 cut-out, 2
@@ -260,6 +284,28 @@ mod tests {
         images.remove(id);
         reg.reload(&mut images, &find, &key, false);
         assert!(!reg.0.contains_key(&id));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// HUD images: a new file, a rewritten file, a removed file and an
+    /// unchanged one.
+    #[test]
+    fn hud_images_whose_file_changed() {
+        let dir = std::env::temp_dir().join(format!("gdl-reload-hud-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let find = |n: &str| Some(dir.join(format!("{n}.png"))).filter(|p| p.is_file());
+        for n in ["same", "rewritten", "removed"] {
+            png(&dir.join(format!("{n}.png")), 2, 2, &[1, 2, 3, 255].repeat(4));
+        }
+        let entries: HashMap<u32, (String, Option<Applied>)> = [(1, "new"), (2, "same"), (3, "rewritten"), (4, "removed"), (5, "none")].into_iter().map(|(k, n)| (k, (n.to_string(), find(n).and_then(|p| Applied::of(&p))))).collect();
+        assert!(changed_files(&entries, &find).is_empty());
+        png(&dir.join("new.png"), 2, 2, &[1, 2, 3, 255].repeat(4));
+        png(&dir.join("rewritten.png"), 4, 4, &[9, 9, 9, 255].repeat(16));
+        std::fs::remove_file(dir.join("removed.png")).unwrap();
+        let mut got = changed_files(&entries, &find);
+        got.sort();
+        assert_eq!(got, [(1, true), (3, true), (4, false)]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
