@@ -79,9 +79,9 @@ pub struct Settings {
     /// once; not part of the presets (Original turns it off).
     pub hd_textures: bool,
     /// NATIVE gameplay option (decisions/0008; not presentation: the
-    /// player's movement follows the camera). "free": the right stick turns
-    /// and zooms the gameplay camera; "original": the original camera.
-    /// Off in network play.
+    /// player's movement follows the camera). "free" (this fork's default):
+    /// the right stick turns and zooms the gameplay camera; "original": the
+    /// original camera (the baseline). Off in network play.
     pub camera: CameraMode,
     /// The free camera still turns with the level's camera rails.
     pub camera_follow_rails: bool,
@@ -128,7 +128,9 @@ impl Default for Settings {
             bloom: true,
             smaa: false,
             hd_textures: false,
-            camera: CameraMode::Original,
+            // This fork is a remaster: the free camera is the default; the
+            // fidelity baseline keeps the original (baseline()).
+            camera: CameraMode::Free,
             camera_follow_rails: true,
             camera_invert: false,
         }
@@ -170,7 +172,7 @@ impl Settings {
     /// anti-aliasing, no flash softening, no replacements, the PlayStation
     /// prompts (fidelity comparisons; GDL_BASELINE=1).
     pub fn baseline() -> Self {
-        Self { button_prompts: Prompts::PlayStation, ..Self::default().with_baseline_presentation() }
+        Self { button_prompts: Prompts::PlayStation, camera: CameraMode::Original, ..Self::default().with_baseline_presentation() }
     }
 
     /// These settings with the original presentation (see `baseline`);

@@ -491,9 +491,45 @@ struct FreeCamZoom(Option<f32>);
 /// NATIVE (decisions/0008): the settings' free camera into the simulation
 /// before each step. Off in network play: every machine would need the
 /// same setting for the lockstep to agree.
-fn free_cam_settings(settings: Res<gdl_client::settings::Settings>, net: Res<Net>, sim: Option<ResMut<Sim>>, mut keep: ResMut<FreeCamZoom>) {
+fn free_cam_settings(
+    settings: Res<gdl_client::settings::Settings>,
+    net: Res<Net>,
+    sim: Option<ResMut<Sim>>,
+    mut keep: ResMut<FreeCamZoom>,
+    mut noted: Local<(Option<bool>, Option<std::time::Instant>)>,
+) {
     let Some(mut sim) = sim else { return };
     let on = settings.camera == gdl_client::settings::CameraMode::Free && net.link.is_none() && net.game.is_none();
+    // The remaster log (gdl_client::audio::note): the setting when it
+    // changes, then at most once a second while a right stick is pushed —
+    // what reached the simulation and the camera's turn and zoom.
+    if noted.0 != Some(on) {
+        noted.0 = Some(on);
+        gdl_client::audio::note(&format!(
+            "free camera {} (setting {:?}{})",
+            if on { "on" } else { "off" },
+            settings.camera,
+            if net.link.is_some() || net.game.is_some() { ", network play: original camera" } else { "" }
+        ));
+    }
+    if on {
+        let g = &sim.game;
+        let stick = (0..4)
+            .filter_map(|k| usize::try_from(g.controls.joy_remap[k]).ok().map(|p| (k, g.controls.control[k].i32_(0x2c), g.controls.analog_right.get(p).copied().unwrap_or_default())))
+            .filter(|(_, _, [_, m])| 0.3 < *m)
+            .collect::<Vec<_>>();
+        let due = noted.1.is_none_or(|t| 1.0 <= t.elapsed().as_secs_f32());
+        if !stick.is_empty() && due {
+            noted.1 = Some(std::time::Instant::now());
+            let f = &g.free_cam;
+            gdl_client::audio::note(&format!(
+                "free camera input: {} → turn {:.0}°, zoom {:.2}x",
+                stick.iter().map(|(k, mode, [a, m])| format!("player {} style {mode} stick {:.2} at {:.0}°", k + 1, m, a.to_degrees())).collect::<Vec<_>>().join("; "),
+                f.yaw.to_degrees(),
+                f.zoom
+            ));
+        }
+    }
     let f = &mut sim.bypass_change_detection().game.free_cam;
     if !on {
         f.enabled = false;

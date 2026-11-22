@@ -609,8 +609,8 @@ fn start_output(_mixer: Arc<Mutex<Mixer>>) -> Option<(Box<dyn std::any::Any>, &'
     None
 }
 
-/// A line in the audio log (Windows: audio-log.txt beside gdl_play.exe;
-/// elsewhere nothing).
+/// A line in the remaster log (Windows: remaster-log.txt beside
+/// gdl_play.exe — sound and camera notes; elsewhere nothing).
 pub fn note(line: &str) {
     #[cfg(windows)]
     audio_log(line);
@@ -618,7 +618,7 @@ pub fn note(line: &str) {
     let _ = line;
 }
 
-/// A line in audio-log.txt beside the executable (Windows: the game has no
+/// A line in remaster-log.txt beside the executable (Windows: the game has no
 /// console, so this is the only place a device problem shows). Rewritten
 /// at each start; at most 400 lines.
 #[cfg(windows)]
@@ -628,7 +628,7 @@ fn audio_log(line: &str) {
     static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     let start = *START.get_or_init(std::time::Instant::now);
     let log = LOG.get_or_init(|| {
-        let path = std::env::current_exe().ok()?.parent()?.join("audio-log.txt");
+        let path = std::env::current_exe().ok()?.parent()?.join("remaster-log.txt");
         std::fs::File::create(path).ok().map(|f| Mutex::new((f, 0)))
     });
     if let Some(Ok(mut g)) = log.as_ref().map(|m| m.lock()) {

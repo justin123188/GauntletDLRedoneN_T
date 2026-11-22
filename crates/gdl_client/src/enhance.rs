@@ -602,11 +602,14 @@ mod tests {
     #[test]
     fn camera_rows_toggle() {
         let (mut o, mut s, mut b) = open();
-        assert_eq!(s.camera, CameraMode::Original);
+        assert_eq!(s.camera, CameraMode::Free);
+        assert_eq!(Settings::baseline().camera, CameraMode::Original);
         while o.lines(&s, &b).iter().all(|l| !l.starts_with("> Camera")) {
             o.input(Input::Down, &mut s, &mut b);
         }
         assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::Changed);
+        assert_eq!(s.camera, CameraMode::Original);
+        o.input(Input::Accept, &mut s, &mut b);
         assert_eq!(s.camera, CameraMode::Free);
         assert!(o.lines(&s, &b).iter().any(|l| l == "> Camera               Free (right stick)"));
         assert!(o.lines(&s, &b).iter().any(|l| l.starts_with("Free camera: right stick")));

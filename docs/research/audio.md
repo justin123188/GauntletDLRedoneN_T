@@ -423,6 +423,6 @@ does not have). start_cpal now takes the device's default format when no
 stereo f32 mode is offered: any channel count (the mix on front left/right,
 mono their average, the rest silent) and any cpal sample format. A thread
 owns the stream and reopens it on a stream error or when the default output
-device changes. audio-log.txt beside gdl_play.exe records the device, its
+device changes. remaster-log.txt beside gdl_play.exe records the device, its
 formats, the choice and errors. Stereo f32 devices get the same samples as
 before. Checked: Windows cross-build; not yet heard on a surround device.
