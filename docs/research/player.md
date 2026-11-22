@@ -723,3 +723,21 @@ Jester's BOMB; the SFX packages the PIXIE_R/G/B frames; the clip packages
 none. gdl_play now spawns the model package's list with the character
 (spawn_body); the SFX lists already ran with the level's (texmod_packages).
 
+This fork (2026-11-22, the owner's playtest: a magenta shape in the
+yellow Wizard's hand when he attacks; the red Wizard fine; upstream 1.3.6
+the same, checked on the owner's PC): the model package's list searched
+only the model package for by-name frames. PLAYERS/WIZ/YEL00's
+YEL_HANDGLOW has no texels in its package (research/textures.md: it
+"points beyond its package payload") and its frames YEL_HANDGLOW00..04
+are POWERUPS' and WEAPONS' (two different sets of texels; POWERUPS comes
+first in texmod_packages); PLAYERS/WIZ/RED00 holds RED_HANDGLOW2 itself,
+and RED_HANDGLOW00..04 are WEAPONS'. The list now searches the level's
+packages and the SFX packages in texmod_packages' order, the level's own
+last (texmod_others; HYPOTHESIS: MBOX_FindTexture's order, as
+spawn_package_texmods), and the first level builds its libraries before
+the bodies. Checked (G1, TEST runs): the yellow Wizard's hand shows a
+yellow glow where frame 500 had the placeholder; the red Wizard unchanged
+to the eye; both Wizards' per-update simulation hashes unchanged. Not
+compared: the glow against PCSX2; whether the red Wizard's glow now steps
+through WEAPONS' frames.
+

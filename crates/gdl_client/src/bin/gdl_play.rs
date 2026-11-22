@@ -4927,10 +4927,24 @@ fn present_special_texmods(sim: Res<Sim>, libs: Res<Libraries>, q: Query<(Entity
 #[derive(Component)]
 struct PlayerShadow(usize);
 
-fn spawn_bodies(commands: &mut Commands, root: Entity, sources: &Sources, session: &Session, meshes: &mut Assets<Mesh>, images: &mut Assets<Image>, materials: &mut Assets<gdl_client::GsMaterial>) {
+/// The packages a player model's texture modifiers search by name after the
+/// model's own (this fork, a fix, 2026-11-22): as spawn_package_texmods,
+/// the level's packages and the players' SFX packages in load order, the
+/// level's own last (HYPOTHESIS: MBOX_FindTexture's order). The yellow
+/// Wizard's YEL_HANDGLOW record has no texels in its model package and its
+/// frames YEL_HANDGLOW00..04 are POWERUPS' and WEAPONS': searching only the
+/// model package left the magenta placeholder in his hand (the owner's
+/// playtest; upstream 1.3.6 too).
+fn texmod_others<'a>(libraries: &'a Libraries, session: &Session, sources: &Sources) -> Vec<&'a Library> {
+    texmod_packages(session, sources).iter().filter_map(|n| libraries.0.get(n)).chain(libraries.0.get(LEVEL_LIB)).collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_bodies(commands: &mut Commands, root: Entity, sources: &Sources, session: &Session, libraries: &Libraries, meshes: &mut Assets<Mesh>, images: &mut Assets<Image>, materials: &mut Assets<gdl_client::GsMaterial>) {
+    let others = texmod_others(libraries, session, sources);
     for slot in 0..4 {
         if let Some(pc) = &sources.players[slot] {
-            spawn_body(commands, root, slot, pc, session, meshes, images, materials);
+            spawn_body(commands, root, slot, pc, session, &others, meshes, images, materials);
         }
     }
 }
@@ -4938,7 +4952,7 @@ fn spawn_bodies(commands: &mut Commands, root: Entity, sources: &Sources, sessio
 /// load_player's body for one slot: the model's rig nodes posed by the
 /// base class's clip nodes, WEAP_HOLD under the right hand, SHADOWL1.
 #[allow(clippy::too_many_arguments)]
-fn spawn_body(commands: &mut Commands, root: Entity, slot: usize, pc: &PlayerChar, session: &Session, meshes: &mut Assets<Mesh>, images: &mut Assets<Image>, materials: &mut Assets<gdl_client::GsMaterial>) {
+fn spawn_body(commands: &mut Commands, root: Entity, slot: usize, pc: &PlayerChar, session: &Session, others: &[&Library], meshes: &mut Assets<Mesh>, images: &mut Assets<Image>, materials: &mut Assets<gdl_client::GsMaterial>) {
     let character = &pc.character;
     let texmods = gdl_formats::animation::texmods(&character.anim_bytes).unwrap_or_default();
     // NATIVE (this fork): a texture dump's sources.tsv.
@@ -4950,7 +4964,7 @@ fn spawn_body(commands: &mut Commands, root: Entity, slot: usize, pc: &PlayerCha
     // level's lists (texmod_packages); the clip packages hold none.
     if !character.anim_bytes.is_empty() {
         let list = gdl_formats::animation::texmods(&character.anim_bytes).unwrap_or_default();
-        spawn_texmod_list(commands, &list, &set.label_index, &set.record_images, &[]);
+        spawn_texmod_list(commands, &list, &set.label_index, &set.record_images, others);
     }
     let (parts, _) = gdl_client::object_meshes(&character.objects, &set, materials, meshes);
     let object_parts = |label: &str| -> Vec<(Handle<Mesh>, Handle<gdl_client::GsMaterial>)> {
@@ -5139,7 +5153,8 @@ fn refresh_characters(
             }
         }
         if let Ok(root) = root.single() {
-            spawn_body(&mut commands, root, k, pc, &session, &mut meshes, &mut images, &mut materials);
+            let others = texmod_others(&libraries, &session, &sources);
+            spawn_body(&mut commands, root, k, pc, &session, &others, &mut meshes, &mut images, &mut materials);
         }
     }
 }
@@ -5196,7 +5211,8 @@ fn test_players(
         g.controls.assign(k, k);
         g.globals.active_players |= 1 << k;
         if let Ok(root) = root.single() {
-            spawn_body(&mut commands, root, k, pc, &session, &mut meshes, &mut images, &mut materials);
+            let others = texmod_others(&libraries, &session, &sources);
+            spawn_body(&mut commands, root, k, pc, &session, &others, &mut meshes, &mut images, &mut materials);
         }
     }
 }
@@ -5255,7 +5271,6 @@ fn setup(
     let level_lib = spawn_level(&mut commands, root, &session, sim.game.items.records.len(), &mut meshes, &mut images, &mut materials);
     commands.insert_resource(ItemSlots(sim.game.items.records.len()));
     libraries.0.insert(LEVEL_LIB.to_string(), level_lib);
-    spawn_bodies(&mut commands, root, &sources, &session, &mut meshes, &mut images, &mut materials);
     for (name, pkg) in &sources.packages {
         if !libraries.0.contains_key(name) {
             gdl_client::texture_pack::set_source(dump_kind(name), name);
@@ -5265,6 +5280,10 @@ fn setup(
             frames.0.insert(name.clone(), enemy_frames(pkg));
         }
     }
+    // The bodies after the packages' libraries (this fork: their texture
+    // modifiers search POWERUPS and WEAPONS, texmod_others; libraries are
+    // assets only, so the entities keep their order).
+    spawn_bodies(&mut commands, root, &sources, &session, &libraries, &mut meshes, &mut images, &mut materials);
     spawn_package_texmods(&mut commands, &libraries, &texmod_packages(&session, &sources));
 }
 
@@ -12395,7 +12414,7 @@ fn advance_level(
                     for b in &shadows {
                         commands.entity(b).despawn();
                     }
-                    spawn_bodies(&mut commands, root, &sources, &session, &mut meshes, &mut images, &mut materials);
+                    spawn_bodies(&mut commands, root, &sources, &session, &libraries, &mut meshes, &mut images, &mut materials);
                 }
             }
         }
