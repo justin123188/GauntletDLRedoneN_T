@@ -11391,11 +11391,22 @@ fn hd_generate_cli(config: &Path, out: &Path) -> Result<(), Box<dyn Error>> {
     let elf = gdl_formats::elf::Elf::parse(&elf_bytes)?;
     let presets = elf.object("preset_list")?.to_vec();
     let effect_info = gdl_client::hd::census::effect_info_names(&elf);
-    let m = gdl_client::hd::generate::generate(&catalog, &presets, &effect_info, &out, |p| {
+    let m = match gdl_client::hd::generate::generate(&catalog, &presets, &effect_info, &out, |p| {
         let mut o = std::io::stdout().lock();
         writeln!(o, "progress {} {} {}", p.stage, p.done, p.total).is_ok() && o.flush().is_ok()
-    })?;
-    println!("done {} complete {} generated {} kept {} textures {} {:.1} s {}", out.display(), m.complete, m.generated, m.kept.len(), m.textures, m.seconds, m.adapter);
+    }) {
+        Ok(m) => m,
+        // NATIVE (this fork): a parent that stopped reading (the game quit
+        // while generating) is a stop, not a failure: no error box from
+        // report_fatal after the game has closed. generate's "cancelled" is
+        // the scan stage's stop; a later stop returns an incomplete pack.
+        Err(e) if e.to_string() == "cancelled" => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    // NATIVE (this fork): not println!, which panics on a closed pipe
+    // ("failed printing to stdout: The pipe is being closed", the owner's
+    // last-error.txt, 2026-11-22).
+    let _ = writeln!(std::io::stdout(), "done {} complete {} generated {} kept {} textures {} {:.1} s {}", out.display(), m.complete, m.generated, m.kept.len(), m.textures, m.seconds, m.adapter);
     Ok(())
 }
 
