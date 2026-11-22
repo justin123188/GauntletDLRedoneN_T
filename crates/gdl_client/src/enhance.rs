@@ -19,6 +19,9 @@ pub enum Input {
     Reset,
     /// Any key, while a binding waits for one.
     Key(KeyCode),
+    /// NATIVE (this fork): a controller button, while a controller binding
+    /// waits for one.
+    Pad(bevy::input::gamepad::GamepadButton),
 }
 
 /// What an input did.
@@ -51,11 +54,12 @@ enum Row {
     Graphics,
     Hud,
     Controls,
+    Pad,
     Original,
     Close,
 }
 
-const MAIN: [Row; 18] = [
+const MAIN: [Row; 19] = [
     Row::Widescreen,
     Row::Blend,
     Row::Vsync,
@@ -72,6 +76,7 @@ const MAIN: [Row; 18] = [
     Row::Graphics,
     Row::Hud,
     Row::Controls,
+    Row::Pad,
     Row::Original,
     Row::Close,
 ];
@@ -159,6 +164,10 @@ pub struct Overlay {
     /// every key is released (Enter would otherwise press Start).
     pub held: bool,
     controls: bool,
+    /// The controller buttons page (NATIVE, this fork).
+    pad: bool,
+    /// The action waiting for a controller button.
+    pad_capture: Option<usize>,
     /// The graphics page.
     graphics: bool,
     /// The HUD layout page (NATIVE, this fork).
@@ -193,6 +202,11 @@ impl Overlay {
         self.capture.is_some()
     }
 
+    /// Whether the next controller button goes to a binding (NATIVE).
+    pub fn capturing_pad(&self) -> bool {
+        self.pad_capture.is_some()
+    }
+
     /// The overlay's lines, the cursor's marked with "> ".
     pub fn lines(&self, s: &Settings, b: &Bindings) -> Vec<String> {
         let mark = |k: usize| if k == self.cursor { "> " } else { "  " };
@@ -211,6 +225,27 @@ impl Overlay {
             out.push(format!("{}Back", mark(ACTIONS.len())));
             out.push(String::new());
             out.push("Enter/pad A: bind  Backspace: default  Escape/pad B: back".to_string());
+            return out;
+        }
+        if self.pad {
+            out.push("CONTROLLER BUTTONS (native; every controller)".to_string());
+            out.push(String::new());
+            for (k, (a, buttons)) in ACTIONS.iter().zip(&b.pad).enumerate() {
+                let names = if self.pad_capture == Some(k) {
+                    "press a controller button... (Escape: cancel)".to_string()
+                } else if buttons.is_empty() {
+                    "none".to_string()
+                } else {
+                    buttons.iter().map(|&p| crate::controls::pad_label(p)).collect::<Vec<_>>().join(", ")
+                };
+                out.push(format!("{}{:<18} {}", mark(k), a.label, names));
+            }
+            out.push(format!("{}Standard layout", mark(ACTIONS.len())));
+            out.push(format!("{}Back", mark(ACTIONS.len() + 1)));
+            out.push(String::new());
+            out.push("While a level plays. Menus, the select screen, the shop and the".to_string());
+            out.push("map keep the standard buttons. Moving a button swaps the two.".to_string());
+            out.push("Enter/pad A: bind  Backspace: standard  Escape/pad B: back".to_string());
             return out;
         }
         if self.hud {
@@ -367,6 +402,7 @@ impl Overlay {
                 Row::Graphics => "Graphics...".to_string(),
                 Row::Hud => "HUD layout...".to_string(),
                 Row::Controls => "Player 1 keys...".to_string(),
+                Row::Pad => "Controller buttons...".to_string(),
                 Row::Original => "Original presentation".to_string(),
                 Row::Close => "Close".to_string(),
             };
@@ -405,8 +441,25 @@ impl Overlay {
                 _ => Effect::None,
             };
         }
+        if let Some(a) = self.pad_capture {
+            return match i {
+                Input::Back => {
+                    self.pad_capture = None;
+                    Effect::None
+                }
+                Input::Pad(p) if crate::controls::PAD_BINDABLE.contains(&p) => {
+                    self.pad_capture = None;
+                    b.bind_pad(a, p);
+                    s.pad = b.pad_to_settings();
+                    Effect::Changed
+                }
+                _ => Effect::None,
+            };
+        }
         let rows = if self.controls {
             ACTIONS.len() + 1
+        } else if self.pad {
+            ACTIONS.len() + 2
         } else if self.graphics {
             GRAPHICS.len()
         } else if self.hud {
@@ -426,6 +479,35 @@ impl Overlay {
             Input::Back if self.controls => {
                 *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Controls).unwrap_or(0), ..self.fresh() };
                 Effect::None
+            }
+            Input::Back if self.pad => {
+                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Pad).unwrap_or(0), ..self.fresh() };
+                Effect::None
+            }
+            _ if self.pad => {
+                let at = self.cursor;
+                match (i, at.cmp(&ACTIONS.len())) {
+                    (Input::Accept, std::cmp::Ordering::Less) => {
+                        self.pad_capture = Some(at);
+                        Effect::None
+                    }
+                    // Backspace: the action's standard button (swapped in).
+                    (Input::Reset, std::cmp::Ordering::Less) => {
+                        match ACTIONS[at].pad.first() {
+                            Some(&p) => b.bind_pad(at, p),
+                            None => b.pad[at].clear(),
+                        }
+                        s.pad = b.pad_to_settings();
+                        Effect::Changed
+                    }
+                    (Input::Accept, std::cmp::Ordering::Equal) => {
+                        b.reset_pad();
+                        s.pad = b.pad_to_settings();
+                        Effect::Changed
+                    }
+                    (Input::Accept, std::cmp::Ordering::Greater) => self.input(Input::Back, s, b),
+                    _ => Effect::None,
+                }
             }
             Input::Back if self.graphics => {
                 *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Graphics).unwrap_or(0), ..self.fresh() };
@@ -571,6 +653,13 @@ impl Overlay {
                         *self = Self { open: true, controls: true, ..self.fresh() };
                         return Effect::None;
                     }
+                    Row::Pad => {
+                        if i != Input::Accept {
+                            return Effect::None;
+                        }
+                        *self = Self { open: true, pad: true, ..self.fresh() };
+                        return Effect::None;
+                    }
                     Row::Original => {
                         if i != Input::Accept {
                             return Effect::None;
@@ -680,6 +769,46 @@ mod tests {
         // Back returns to the main page at "Graphics...".
         o.input(Input::Back, &mut s, &mut b);
         assert!(o.open && o.lines(&s, &b).iter().any(|l| l == "> Graphics..."));
+    }
+
+    /// NATIVE (this fork, decisions/0012): the controller buttons page.
+    #[test]
+    fn controller_buttons_page() {
+        use bevy::input::gamepad::GamepadButton;
+        let (mut o, mut s, mut b) = open();
+        o.cursor = MAIN.iter().position(|r| *r == Row::Pad).unwrap();
+        assert!(o.lines(&s, &b).iter().any(|l| l == "> Controller buttons..."));
+        o.input(Input::Accept, &mut s, &mut b);
+        assert!(o.lines(&s, &b).iter().any(|l| l == "  Cross (attack)     A / Cross"));
+        let cross = ACTIONS.iter().position(|a| a.name == "cross").unwrap();
+        for _ in 0..cross {
+            o.input(Input::Down, &mut s, &mut b);
+        }
+        o.input(Input::Accept, &mut s, &mut b);
+        assert!(o.capturing_pad() && !o.capturing());
+        // Keys and unbindable buttons wait; RB binds and swaps.
+        assert_eq!(o.input(Input::Key(KeyCode::KeyN), &mut s, &mut b), Effect::None);
+        assert_eq!(o.input(Input::Pad(GamepadButton::Mode), &mut s, &mut b), Effect::None);
+        assert_eq!(o.input(Input::Pad(GamepadButton::RightTrigger), &mut s, &mut b), Effect::Changed);
+        assert!(!o.capturing_pad());
+        assert_eq!(s.pad.get("cross"), Some(&vec!["RightTrigger".to_string()]));
+        assert!(o.lines(&s, &b).iter().any(|l| l == "  R1 (strafe)        A / Cross"));
+        // Escape cancels a wait; Backspace gives the standard button back.
+        o.input(Input::Accept, &mut s, &mut b);
+        assert_eq!(o.input(Input::Back, &mut s, &mut b), Effect::None);
+        assert!(o.open && !o.capturing_pad());
+        assert_eq!(o.input(Input::Reset, &mut s, &mut b), Effect::Changed);
+        assert!(s.pad.is_empty());
+        // Standard layout, then Back to the main page.
+        o.input(Input::Accept, &mut s, &mut b);
+        o.input(Input::Pad(GamepadButton::West), &mut s, &mut b);
+        assert!(!s.pad.is_empty());
+        o.cursor = ACTIONS.len();
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::Changed);
+        assert!(s.pad.is_empty() && b == Bindings::default());
+        o.input(Input::Down, &mut s, &mut b);
+        o.input(Input::Accept, &mut s, &mut b);
+        assert!(o.open && o.lines(&s, &b).iter().any(|l| l == "> Controller buttons..."));
     }
 
     /// NATIVE (this fork, decisions/0011): the HUD layout page.

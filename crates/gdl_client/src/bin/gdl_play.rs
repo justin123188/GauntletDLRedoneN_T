@@ -513,7 +513,7 @@ fn enhancement_input(
     mut bindings: ResMut<gdl_client::controls::Bindings>,
     dir: Res<SettingsDir>,
     (sim, harness): (Option<Res<Sim>>, Res<TestHarness>),
-    mut acted: Local<Option<u64>>,
+    (mut acted, mut pad_wait): (Local<Option<u64>>, Local<Option<std::time::Instant>>),
     mut pads: Query<(&mut Gamepad, Option<&Name>)>,
 ) {
     use gdl_client::enhance::{Effect, Input};
@@ -531,7 +531,7 @@ fn enhancement_input(
                 now.extend(add.clone());
                 if let Ok(mut s) = serde_json::from_value::<gdl_client::settings::Settings>(serde_json::Value::Object(now)) {
                     s.sanitise();
-                    *bindings = gdl_client::controls::Bindings::from_settings(&s.keys);
+                    *bindings = gdl_client::controls::Bindings::from_settings(&s.keys, &s.pad);
                     *settings = s;
                     changed = true;
                 }
@@ -552,7 +552,20 @@ fn enhancement_input(
         let mut inputs = Vec::new();
         let pad = |b: GamepadButton| pads.iter().any(|(g, n)| pad_used(n) && g.just_pressed(b));
         let pad_back = pad(GamepadButton::East) || pad(GamepadButton::North);
-        if overlay.capturing() {
+        // NATIVE (this fork, decisions/0012): a controller binding takes the
+        // next bindable button; Escape, or 10 s without one, cancels.
+        let waited = overlay.capturing_pad() && pad_wait.get_or_insert_with(std::time::Instant::now).elapsed().as_secs() >= 10;
+        if !overlay.capturing_pad() {
+            *pad_wait = None;
+        }
+        if overlay.capturing_pad() {
+            let button = pads.iter().filter(|(_, n)| pad_used(*n)).flat_map(|(g, _)| g.get_just_pressed().copied().collect::<Vec<_>>()).find(|b| gdl_client::controls::PAD_BINDABLE.contains(b));
+            if keys.just_pressed(KeyCode::Escape) || waited {
+                inputs.push(Input::Back);
+            } else if let Some(b) = button {
+                inputs.push(Input::Pad(b));
+            }
+        } else if overlay.capturing() {
             if keys.just_pressed(KeyCode::Escape) || pad_back {
                 inputs.push(Input::Back);
             } else if let Some(&k) = keys.get_just_pressed().next() {
@@ -3306,6 +3319,15 @@ struct Sim {
     flyby_done: bool,
 }
 
+impl Sim {
+    /// Whether the level plays: no select screen, shop, map, movie or
+    /// scroll message (they read the same PlayerControl ports). NATIVE
+    /// (this fork): the controllers' own layout applies only then.
+    fn in_play(&self) -> bool {
+        self.select.is_none() && self.shop.is_none() && self.map.is_none() && self.movie.is_none() && self.message_box.is_none()
+    }
+}
+
 /// The full-screen movie frame (HUD layer, above the other blits).
 #[derive(Component)]
 struct MovieQuad;
@@ -3738,7 +3760,9 @@ enum MovieThen {
 /// select (K/L/I/J as the reference's PCSX2 bindings); port 1: TFGH, R
 /// cross, Y circle, U start, B L2; gamepads by their face/shoulder
 /// buttons (left stick as analog entries 4–7, right stick 0xe–0x11).
-fn player_input(slot: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bindings: &gdl_client::controls::Bindings, keyboard: bool) -> PadStatus {
+/// NATIVE (this fork, decisions/0012): `remap` (a level plays) takes the
+/// gamepads' buttons from `bindings.pad`, else the standard layout.
+fn player_input(slot: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bindings: &gdl_client::controls::Bindings, keyboard: bool, remap: bool) -> PadStatus {
     let mut s = PadStatus { connected: true, ..Default::default() };
     let press = |s: &mut PadStatus, i: usize, on: bool| {
         if on {
@@ -3777,20 +3801,13 @@ fn player_input(slot: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bin
         // `keyboard` false also mutes the controller's buttons and stick
         // (the overlay has them); the pad stays connected.
         let b = |x: GamepadButton| keyboard && g.pressed(x);
-        press(&mut s, 0, b(GamepadButton::DPadLeft));
-        press(&mut s, 1, b(GamepadButton::DPadRight));
-        press(&mut s, 2, b(GamepadButton::DPadUp));
-        press(&mut s, 3, b(GamepadButton::DPadDown));
-        press(&mut s, 0xd, b(GamepadButton::South));
-        press(&mut s, 0xb, b(GamepadButton::East));
-        press(&mut s, 0xc, b(GamepadButton::North));
-        press(&mut s, 0xa, b(GamepadButton::West));
-        press(&mut s, 8, b(GamepadButton::LeftTrigger));
-        press(&mut s, 9, b(GamepadButton::LeftTrigger2));
-        press(&mut s, 0x12, b(GamepadButton::RightTrigger));
-        press(&mut s, 0x13, b(GamepadButton::RightTrigger2));
-        press(&mut s, 0x14, b(GamepadButton::Start));
-        press(&mut s, 0x15, b(GamepadButton::Select));
+        // The standard layout (controls::ACTIONS' `pad`): d-pad 0–3, South
+        // 0xd, East 0xb, North 0xc, West 0xa, LeftTrigger 8, LeftTrigger2
+        // 9, RightTrigger 0x12, RightTrigger2 0x13, Start 0x14, Select 0x15.
+        for (a, bound) in gdl_client::controls::ACTIONS.iter().zip(&bindings.pad) {
+            let buttons: &[GamepadButton] = if remap { bound } else { a.pad };
+            press(&mut s, a.entry, buttons.iter().any(|&x| b(x)));
+        }
         // The sticks as pressure-style entries, left 4–7 and right 0xe–0x11
         // (left, right, up, down); a right-stick key pressed above keeps
         // its entry.
@@ -6531,7 +6548,7 @@ fn net_local_tick(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<(Entity, &Gamepad, Option<&Name>)>,
     (bindings, overlay): (Res<gdl_client::controls::Bindings>, Res<gdl_client::enhance::Overlay>),
-    screen: Res<Screen>,
+    (screen, sim): (Res<Screen>, Option<Res<Sim>>),
     mut net: ResMut<Net>,
 ) {
     let Net { link, game, pending, waiting, .. } = &mut *net;
@@ -6573,7 +6590,8 @@ fn net_local_tick(
         }
         let tick = ng.input_next;
         let n = gdl_client::net::ports_of(ng.you, ng.machines).len();
-        let mut mine = net_local_pads(n, &keys, &pads, &bindings, !overlay.open && !overlay.held);
+        let remap = sim.as_ref().is_some_and(|s| s.in_play());
+        let mut mine = net_local_pads(n, &keys, &pads, &bindings, !overlay.open && !overlay.held, remap);
         let mut events = std::mem::take(pending);
         // TEST: GDL_NET_SCRIPT entries below 0x16 press this machine's first
         // port, 0x100 + code sends a menu event (NET_KEYS, NET_TOGGLE).
@@ -6747,10 +6765,10 @@ impl gdl_core::game::pselect::SaveCard for NetCard<'_> {
 
 /// This machine's pads for its `n` ports: local players 0.. as single play
 /// fills ports 0..3 (the keyboard serves the first two).
-fn net_local_pads(n: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bindings: &gdl_client::controls::Bindings, keyboard: bool) -> Vec<gdl_core::game::pad::PadStatus> {
+fn net_local_pads(n: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bindings: &gdl_client::controls::Bindings, keyboard: bool, remap: bool) -> Vec<gdl_core::game::pad::PadStatus> {
     (0..n)
         .map(|k| {
-            let mut p = player_input(k, keys, pads, bindings, keyboard);
+            let mut p = player_input(k, keys, pads, bindings, keyboard, remap);
             p.connected = k < 2 || pads.get(k).is_some();
             p
         })
@@ -6928,8 +6946,9 @@ fn simulate(
         due.clone_from(&f.events);
         frame = Some(f);
     } else {
+        let remap = sim.in_play();
         for (k, port) in ports.iter_mut().take(4).enumerate() {
-            *port = player_input(k, &keys, &pads, &bindings, !overlay.open && !overlay.held);
+            *port = player_input(k, &keys, &pads, &bindings, !overlay.open && !overlay.held, remap);
             // Only ports with a device are connected (keyboard: ports 0 and 1).
             port.connected = k < 2 || pads.get(k).is_some();
         }
@@ -6937,7 +6956,7 @@ fn simulate(
     let networked = frame.is_some();
     // Only while the level plays: the select screen, shop, map and movies
     // keep the keyboard (they read the same PlayerControl ports).
-    let in_play = sim.select.is_none() && sim.shop.is_none() && sim.map.is_none() && sim.movie.is_none() && sim.message_box.is_none();
+    let in_play = sim.in_play();
     if in_play && !harness.actions.is_empty() {
         let now = sim.updates;
         // In a network game only the dumps: the other actions would change
@@ -12073,7 +12092,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     app
         .insert_resource(settings.clone())
-        .insert_resource(gdl_client::controls::Bindings::from_settings(&settings.keys))
+        .insert_resource(gdl_client::controls::Bindings::from_settings(&settings.keys, &settings.pad))
         .init_resource::<gdl_client::enhance::Overlay>()
         .init_resource::<FrameLayout>()
         .insert_resource(SettingsDir(settings_dir))
@@ -12652,6 +12671,54 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// NATIVE (this fork, decisions/0012): a controller's buttons in play
+    /// follow Settings::pad; elsewhere (`remap` false) the standard layout.
+    /// The standard layout presses what the fixed mapping did.
+    #[test]
+    fn controller_buttons_follow_the_layout_in_play() {
+        use gdl_client::controls::{ACTIONS, Bindings};
+        let keys = ButtonInput::<KeyCode>::default();
+        let pressed = |s: &PadStatus| (0..0x16).filter(|i| !(4..=7).contains(i) && !(0xe..=0x11).contains(i)).filter(|&i| s.entries[i][0] != 0).collect::<Vec<_>>();
+        let with = |b: GamepadButton| {
+            let mut g = Gamepad::default();
+            g.digital_mut().press(b);
+            g
+        };
+        let standard = Bindings::default();
+        let fixed = [
+            (GamepadButton::DPadLeft, 0),
+            (GamepadButton::DPadRight, 1),
+            (GamepadButton::DPadUp, 2),
+            (GamepadButton::DPadDown, 3),
+            (GamepadButton::South, 0xd),
+            (GamepadButton::East, 0xb),
+            (GamepadButton::North, 0xc),
+            (GamepadButton::West, 0xa),
+            (GamepadButton::LeftTrigger, 8),
+            (GamepadButton::LeftTrigger2, 9),
+            (GamepadButton::RightTrigger, 0x12),
+            (GamepadButton::RightTrigger2, 0x13),
+            (GamepadButton::Start, 0x14),
+            (GamepadButton::Select, 0x15),
+        ];
+        for (b, entry) in fixed {
+            let g = with(b);
+            for remap in [false, true] {
+                assert_eq!(pressed(&player_input(0, &keys, &[&g], &standard, true, remap)), [entry], "{b:?}");
+            }
+        }
+        assert!(pressed(&player_input(0, &keys, &[&with(GamepadButton::RightThumb)], &standard, true, true)).is_empty());
+        // Attack on RB (strafe takes A): in play only.
+        let mut b = standard.clone();
+        b.bind_pad(ACTIONS.iter().position(|a| a.name == "cross").unwrap(), GamepadButton::RightTrigger);
+        let rb = with(GamepadButton::RightTrigger);
+        assert_eq!(pressed(&player_input(0, &keys, &[&rb], &b, true, true)), [0xd]);
+        assert_eq!(pressed(&player_input(0, &keys, &[&rb], &b, true, false)), [0x12]);
+        assert_eq!(pressed(&player_input(0, &keys, &[&with(GamepadButton::South)], &b, true, true)), [0x12]);
+        // The overlay has the controller: nothing.
+        assert!(pressed(&player_input(0, &keys, &[&rb], &b, false, true)).is_empty());
+    }
 
     #[test]
     fn top_face_keeps_the_nodes_own_z() {

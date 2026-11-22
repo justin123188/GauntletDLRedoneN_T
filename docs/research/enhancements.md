@@ -27,6 +27,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | show_fps | false | (kept) | frame-rate counter |
 | button_prompts | "auto" | "playstation" (GDL_BASELINE; the overlay's "Original presentation" keeps it) | the face-button prompts' style: "auto", "playstation", "xbox" (Button prompts, below) |
 | keys | {} | (kept) | player 1's key bindings (action → key names) |
+| pad | {} | (kept) | NATIVE (this fork): every controller's buttons in play (action → button names; Key bindings, below) |
 | texture_filter | "sharp" | "original" | "sharp": base textures at the GPU's level of detail, 16× anisotropic, over full mip chains (Graphics, below) |
 | sharpen | 40 | 0 | contrast-adaptive sharpening of the 3D view, percent (0, 20 … 100) |
 | full_colour | true | false | no 16-bit frame, dither or integer truncation, at the original's mean level |
@@ -632,7 +633,8 @@ connected), and the presses it took are cleared for the frame. Closing
 from "Display" leaves the options list where it was. F11 toggles fullscreen and
 F3 the frame-rate counter anywhere. Changes are stored at once. The F-keys
 F1, F2 and F9 keep their DEBUG uses. This fork adds a "HUD layout..." page
-(HUD layout, above).
+(HUD layout, above) and a "Controller buttons..." page (Key bindings,
+below).
 
 Front end (NATIVE): Back on "Press Start" (Escape, Backspace, a
 controller's North/triangle) quits the client — the PS2 game has no exit;
@@ -753,6 +755,13 @@ menus accept, besides their fixed keys (arrows, Enter, Escape, Backspace,
 C), the bound keys of the directions, cross, triangle and circle. Player 2's
 keys and gamepad buttons are fixed. GUI check (private/runs/client-m19-
 bind1): with cross bound to N, holding N attacks and Space no longer does.
+
+Controller buttons (this fork, decisions/0012): `pad` (action → button
+names) is one layout for every controller, used while a level plays; the
+select screen, shop, map, movies, scroll messages, native menus and the
+overlay keep the standard buttons. F10 → "Controller buttons...": a
+moved button swaps with the action that had it; Backspace and "Standard
+layout" restore. The sticks are not rebound.
 
 ## Button prompts
 

@@ -49,6 +49,11 @@ pub struct Settings {
     /// Keyboard bindings for player 1 (action name → key names); empty: the
     /// built-in defaults.
     pub keys: std::collections::BTreeMap<String, Vec<String>>,
+    /// NATIVE (this fork, decisions/0012): every controller's buttons while
+    /// a level plays (action name → button names, gdl_client::controls);
+    /// empty: the standard layout. Kept by the original presentation, like
+    /// the keys.
+    pub pad: std::collections::BTreeMap<String, Vec<String>>,
     /// Graphics (post-1.0 enhancements; research/enhancements.md
     /// "Graphics"). "sharp": every base texture at the GPU's level of
     /// detail with 16× anisotropic filtering over a full mip chain
@@ -128,6 +133,7 @@ impl Default for Settings {
             show_fps: false,
             button_prompts: Prompts::Auto,
             keys: Default::default(),
+            pad: Default::default(),
             // The Enhanced preset (the user's choice after the checkpoint A
             // playtest, 2026-10-30).
             texture_filter: TextureFilter::Sharp,
