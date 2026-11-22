@@ -8,6 +8,7 @@ pub mod controls;
 pub mod enhance;
 pub mod glyphs;
 pub mod hd;
+pub mod hud_layout;
 pub mod menu;
 pub mod movie;
 pub mod net;

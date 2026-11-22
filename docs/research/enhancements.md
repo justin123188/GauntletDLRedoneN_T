@@ -38,6 +38,9 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | bloom | true | false | bloom around glows brighter than full white |
 | smaa | false | false | anti-aliasing by SMAA instead of MSAA (the main page's anti-aliasing row) |
 | hd_textures | false | false | the generated 4× texture pack; turning it on generates the pack once; outside the presets, Original turns it off |
+| hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
+| hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
+| hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
 
 ## Graphics (post-1.0, 2026-10-30)
 
@@ -628,7 +631,8 @@ and the game ignore the controllers' buttons and stick (the pads stay
 connected), and the presses it took are cleared for the frame. Closing
 from "Display" leaves the options list where it was. F11 toggles fullscreen and
 F3 the frame-rate counter anywhere. Changes are stored at once. The F-keys
-F1, F2 and F9 keep their DEBUG uses.
+F1, F2 and F9 keep their DEBUG uses. This fork adds a "HUD layout..." page
+(HUD layout, above).
 
 Front end (NATIVE): Back on "Press Start" (Escape, Backspace, a
 controller's North/triangle) quits the client — the PS2 game has no exit;
@@ -680,6 +684,24 @@ original view; players are still kept within the original view. Checked:
 per-update simulation hashes over 600 updates of a G1 walk are equal with
 widescreen fullscreen at 1920×1080, blending, MSAA 4 and no vsync against
 the baseline at 1280×896.
+
+## HUD layout (this fork, 2026-11-22)
+
+NATIVE (decisions/0011; gdl_client::hud_layout, gdl_core hud::PanelPart):
+F10 → "HUD layout..." sets the player panels' size (hud_size, 50 to 100 %,
+scaled toward the screen's bottom), spreads them to the window's edges in
+widescreen (hud_edges: player 1's at the left, player 4's at the right) and
+leaves out the panels of players not in the game (hud_hide_empty). gdl_core
+tags what belongs to each box (the panel's blits, WritePlayerInfo's text,
+the It marker, pickup notices; help boxes over a box follow it sideways);
+present_hud moves the tagged blits. With any layout other than the
+original the 3D view continues to the frame's bottom under the HUD strip
+(Ps2Projection.below: an off-centre frustum, the original picture in
+place) and each panel drawn keeps the black the original had below its 3D
+view. 2D screens and movies keep the original layout. The added rows are
+outside the simulation's visibility tests, like the widescreen margins.
+Checked: the original layout pixel-identical to the previous build in a
+frozen G1 frame, the simulation hashes unchanged.
 
 ## Frame rate and blending
 
@@ -827,8 +849,9 @@ fill_clear) would remove it.
 
 `reduce_flashes` shows a brightening SetAmbientSpecial (lightning, the
 flashes of SetAmbientSpecial callers) at 30 % of its value; darkening
-specials (S5's dark level) are unchanged. Key rebinding (above). Not
-provided: HUD or text scaling (the original HUD's fixed 512×384 layout),
+specials (S5's dark level) are unchanged. Key rebinding (above). This
+fork: the player panels' size and place (HUD layout, above). Not
+provided: text scaling (menus, captions, the settings overlay),
 subtitles beyond the original captions.
 
 ## Diagnostics

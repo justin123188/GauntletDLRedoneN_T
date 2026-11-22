@@ -50,6 +50,10 @@ const MIRROR: Vec3 = Vec3::new(-1.0, 1.0, 1.0);
 /// 3D viewport is the top 384 of 448 frame rows (viewport inset 64).
 /// NATIVE ENHANCEMENT (Settings::widescreen): `wide` keeps the vertical
 /// angle and widens the horizontal one to the viewport's aspect (Hor+).
+/// NATIVE (this fork, decisions/0011; the HUD layout options): `below`
+/// continues the view under the HUD strip — the viewport is that many times
+/// the original rows tall, the extra rows below with the same angle per
+/// row (an off-centre frustum: the original picture stays where it was).
 #[derive(Debug, Clone)]
 struct Ps2Projection {
     tan_h: f32,
@@ -59,25 +63,34 @@ struct Ps2Projection {
     /// The viewport's width / height (CameraProjection::update).
     aspect: f32,
     wide: bool,
+    /// The viewport's rows / the original 3D rows (1: the original).
+    below: f32,
 }
 
 impl Ps2Projection {
     fn new(tan_h: f32, tan_v: f32, near: f32, far: f32) -> Self {
-        Self { tan_h, tan_v, near, far, aspect: tan_h / tan_v, wide: false }
+        Self { tan_h, tan_v, near, far, aspect: tan_h / tan_v, wide: false, below: 1.0 }
     }
 
-    /// The horizontal half-angle tangent drawn.
+    /// The horizontal half-angle tangent drawn (wide: of the original
+    /// rows' aspect).
     fn shown_tan_h(&self) -> f32 {
-        if self.wide && self.aspect.is_finite() && 0.0 < self.aspect { self.tan_v * self.aspect } else { self.tan_h }
+        if self.wide && self.aspect.is_finite() && 0.0 < self.aspect { self.tan_v * self.aspect * self.below } else { self.tan_h }
+    }
+
+    /// The view's top and bottom tangents.
+    fn tan_top_bottom(&self) -> (f32, f32) {
+        (self.tan_v, -self.tan_v * (2.0 * self.below - 1.0))
     }
 }
 
 impl bevy::camera::CameraProjection for Ps2Projection {
     fn get_clip_from_view(&self) -> Mat4 {
+        let (t, b) = self.tan_top_bottom();
         Mat4::from_cols(
             Vec4::new(1.0 / self.shown_tan_h(), 0.0, 0.0, 0.0),
-            Vec4::new(0.0, 1.0 / self.tan_v, 0.0, 0.0),
-            Vec4::new(0.0, 0.0, 0.0, -1.0),
+            Vec4::new(0.0, 2.0 / (t - b), 0.0, 0.0),
+            Vec4::new(0.0, (t + b) / (t - b), 0.0, -1.0),
             Vec4::new(0.0, 0.0, self.near, 0.0),
         )
     }
@@ -93,9 +106,10 @@ impl bevy::camera::CameraProjection for Ps2Projection {
         self.far
     }
     fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [bevy::math::Vec3A; 8] {
+        let (t, b) = self.tan_top_bottom();
         let c = |z: f32| {
-            let (x, y) = (z.abs() * self.shown_tan_h(), z.abs() * self.tan_v);
-            [(x, -y), (x, y), (-x, y), (-x, -y)].map(|(a, b)| bevy::math::Vec3A::new(a, b, z))
+            let (x, top, bottom) = (z.abs() * self.shown_tan_h(), z.abs() * t, z.abs() * b);
+            [(x, bottom), (x, top), (-x, top), (-x, bottom)].map(|(a, b)| bevy::math::Vec3A::new(a, b, z))
         };
         let (n, f) = (c(z_near), c(z_far));
         [n[0], n[1], n[2], n[3], f[0], f[1], f[2], f[3]]
@@ -125,11 +139,14 @@ struct HudCamera;
 #[derive(Resource)]
 struct FrameLayout {
     hud_span: f32,
+    /// NATIVE (this fork, decisions/0011): where the player panels go in
+    /// play (the HUD layout options; None: not in play).
+    panels: Option<gdl_client::hud_layout::PanelLayout>,
 }
 
 impl Default for FrameLayout {
     fn default() -> Self {
-        Self { hud_span: 512.0 }
+        Self { hud_span: 512.0, panels: None }
     }
 }
 
@@ -966,6 +983,16 @@ fn ps2_viewport(
         .and_then(|s| s.game.std_camera.as_ref())
         .map_or((448.0, 64.0), |c| (c.window.frame[1] as f32, c.window.viewport[3] + c.window.viewport[2]));
     let rows = (fh as f32 * (frame - inset) / frame).round() as u32;
+    let span = if wide { 512.0 * width as f32 / fw as f32 } else { 512.0 };
+    // NATIVE (this fork, decisions/0011): the HUD layout options in play;
+    // a layout other than the original continues the 3D view under the
+    // HUD strip, to the frame's bottom.
+    let panels = sim.as_ref().filter(|_| !movie && !screen_2d).and_then(|s| {
+        let t = s.game.hud.tables.as_ref()?;
+        let in_use = std::array::from_fn(|p| (1 << p) & s.game.globals.active_players != 0);
+        Some(gdl_client::hud_layout::PanelLayout::new(settings.hud_size, settings.hud_edges, settings.hud_hide_empty, span, t.box_lx.map(|v| v as f32), in_use, 384.0 * (frame - inset) / frame))
+    });
+    let (rows, below) = if panels.as_ref().is_some_and(|p| p.changed()) && 0 < rows && rows < fh { (fh, fh as f32 / rows as f32) } else { (rows, 1.0) };
     if let Ok((mut cam, mut projection)) = cams.single_mut() {
         let (x, vw) = if wide { (0, width) } else { (fx, fw) };
         let want = bevy::camera::Viewport { physical_position: UVec2::new(x, fy), physical_size: UVec2::new(vw.max(1), rows.max(1)), ..default() };
@@ -973,11 +1000,12 @@ fn ps2_viewport(
             cam.viewport = Some(want);
         }
         if let Projection::Custom(custom) = &*projection
-            && custom.get::<Ps2Projection>().is_some_and(|p| p.wide != wide)
+            && custom.get::<Ps2Projection>().is_some_and(|p| p.wide != wide || p.below != below)
             && let Projection::Custom(custom) = &mut *projection
             && let Some(p) = custom.get_mut::<Ps2Projection>()
         {
             p.wide = wide;
+            p.below = below;
         }
     }
     let (sw, sh) = (512.0 * width as f32 / fw as f32, 384.0 * height as f32 / fh as f32);
@@ -989,9 +1017,11 @@ fn ps2_viewport(
             o.scaling_mode = bevy::camera::ScalingMode::Fixed { width: sw, height: sh };
         }
     }
-    let span = if wide { 512.0 * width as f32 / fw as f32 } else { 512.0 };
     if layout.hud_span != span {
         layout.hud_span = span;
+    }
+    if layout.panels != panels {
+        layout.panels = panels;
     }
     let rect = Vec4::new(fx as f32 / width as f32, fy as f32 / height as f32, fw as f32 / width as f32, fh as f32 / height as f32);
     let wide = if wide { 1.0 } else { 0.0 };
@@ -9506,6 +9536,36 @@ fn present_hud(
                 (b.x, b.y, b.w, b.h) = (x, 0.0, side, 384.0);
                 b.rgba = [0, 0, 0, t.rgba[3]];
                 list.push(b);
+            }
+        }
+        // NATIVE (this fork, decisions/0011): the HUD layout options. A
+        // box's blits and text move with its panel (or go, for a hidden
+        // box); under each panel drawn, the black the original had below
+        // its 3D view (which now continues there), so the panel looks as
+        // it did.
+        if let Some(pl) = layout.panels.as_ref().filter(|p| p.changed()) {
+            use gdl_core::game::hud::{Blit, PANEL_Z, PanelPart};
+            let mut drawn = [false; 4];
+            list.retain_mut(|b| {
+                let Some(part) = b.panel else { return true };
+                let Some(r) = pl.place(part, [b.x, b.y, b.w, b.h]) else { return false };
+                if let PanelPart::Panel(p) = part
+                    && PANEL_Z <= b.z
+                    && b.tex.is_some()
+                    && 0.0 < b.w
+                    && 0.0 < b.h
+                    && 1 < b.rgba[3]
+                {
+                    drawn[usize::from(p & 3)] = true;
+                }
+                [b.x, b.y, b.w, b.h] = r;
+                true
+            });
+            for p in (0..4).filter(|&p| drawn[p] && white.is_some()) {
+                if let Some([x, y, w, h]) = pl.backing(p) {
+                    let crop = [0.0, 1.0, 0.0, 1.0];
+                    list.push(Blit { flags: 0, tex: white, x, y, w, h, crop, rgba: [0, 0, 0, 0x80], corners: [[0x80; 4]; 3], z: PANEL_Z + 1.0, mask: None, panel: None });
+                }
             }
         }
     }

@@ -49,12 +49,13 @@ enum Row {
     CameraRails,
     CameraInvert,
     Graphics,
+    Hud,
     Controls,
     Original,
     Close,
 }
 
-const MAIN: [Row; 17] = [
+const MAIN: [Row; 18] = [
     Row::Widescreen,
     Row::Blend,
     Row::Vsync,
@@ -69,6 +70,7 @@ const MAIN: [Row; 17] = [
     Row::CameraRails,
     Row::CameraInvert,
     Row::Graphics,
+    Row::Hud,
     Row::Controls,
     Row::Original,
     Row::Close,
@@ -112,6 +114,17 @@ const GRAPHICS: [GRow; 14] = [
 ];
 const SHARPEN: [u32; 6] = [0, 20, 40, 60, 80, 100];
 
+/// NATIVE (this fork, decisions/0011): the HUD layout page's rows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum HRow {
+    Size,
+    Edges,
+    HideEmpty,
+    Back,
+}
+
+const HUD: [HRow; 4] = [HRow::Size, HRow::Edges, HRow::HideEmpty, HRow::Back];
+
 /// The generated HD texture pack's state, as gdl_play reports it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum HdStatus {
@@ -148,6 +161,8 @@ pub struct Overlay {
     controls: bool,
     /// The graphics page.
     graphics: bool,
+    /// The HUD layout page (NATIVE, this fork).
+    hud: bool,
     cursor: usize,
     /// The action waiting for a key.
     capture: Option<usize>,
@@ -196,6 +211,38 @@ impl Overlay {
             out.push(format!("{}Back", mark(ACTIONS.len())));
             out.push(String::new());
             out.push("Enter/pad A: bind  Backspace: default  Escape/pad B: back".to_string());
+            return out;
+        }
+        if self.hud {
+            out.push("HUD LAYOUT (native)".to_string());
+            out.push(String::new());
+            for (k, row) in HUD.iter().enumerate() {
+                let text = match row {
+                    HRow::Size => format!("HUD size             {} %", s.hud_size),
+                    HRow::Edges => format!("Panels at the edges  {}", on(s.hud_edges)),
+                    HRow::HideEmpty => format!("Hide empty panels    {}", on(s.hud_hide_empty)),
+                    HRow::Back => "Back".to_string(),
+                };
+                out.push(format!("{}{text}", mark(k)));
+            }
+            out.push(String::new());
+            match HUD.get(self.cursor) {
+                Some(HRow::Size) => {
+                    out.push("HUD size: the player panels smaller, at the bottom of the screen;".to_string());
+                    out.push("the game view shows in the space they leave.".to_string());
+                }
+                Some(HRow::Edges) => {
+                    out.push("Panels at the edges: in the widescreen view, player 1's panel at".to_string());
+                    out.push("the left edge and player 4's at the right, the others between.".to_string());
+                }
+                Some(HRow::HideEmpty) => {
+                    out.push("Hide empty panels: no panel for a player not in the game; it".to_string());
+                    out.push("comes back when someone joins.".to_string());
+                }
+                _ => {}
+            }
+            out.push("Arrows / d-pad: choose   Enter / pad A / Left / Right: change".to_string());
+            out.push("Escape / pad B: back".to_string());
             return out;
         }
         if self.graphics {
@@ -318,6 +365,7 @@ impl Overlay {
                 Row::CameraRails => format!("  Turns with level   {}", on(s.camera_follow_rails)),
                 Row::CameraInvert => format!("  Invert turning     {}", on(s.camera_invert)),
                 Row::Graphics => "Graphics...".to_string(),
+                Row::Hud => "HUD layout...".to_string(),
                 Row::Controls => "Player 1 keys...".to_string(),
                 Row::Original => "Original presentation".to_string(),
                 Row::Close => "Close".to_string(),
@@ -361,6 +409,8 @@ impl Overlay {
             ACTIONS.len() + 1
         } else if self.graphics {
             GRAPHICS.len()
+        } else if self.hud {
+            HUD.len()
         } else {
             MAIN.len()
         };
@@ -380,6 +430,28 @@ impl Overlay {
             Input::Back if self.graphics => {
                 *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Graphics).unwrap_or(0), ..self.fresh() };
                 Effect::None
+            }
+            Input::Back if self.hud => {
+                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Hud).unwrap_or(0), ..self.fresh() };
+                Effect::None
+            }
+            Input::Accept | Input::Left | Input::Right if self.hud => {
+                match HUD[self.cursor] {
+                    HRow::Size => {
+                        let sizes = crate::hud_layout::SIZES;
+                        let at = sizes.iter().position(|&v| v == s.hud_size).unwrap_or(sizes.len() - 1);
+                        s.hud_size = sizes[if i == Input::Left { (at + sizes.len() - 1) % sizes.len() } else { (at + 1) % sizes.len() }];
+                    }
+                    HRow::Edges => s.hud_edges = !s.hud_edges,
+                    HRow::HideEmpty => s.hud_hide_empty = !s.hud_hide_empty,
+                    HRow::Back => {
+                        if i != Input::Accept {
+                            return Effect::None;
+                        }
+                        return self.input(Input::Back, s, b);
+                    }
+                }
+                Effect::Changed
             }
             Input::Back => self.toggle(),
             Input::Accept | Input::Left | Input::Right if self.graphics => {
@@ -483,6 +555,13 @@ impl Overlay {
                             return Effect::None;
                         }
                         *self = Self { open: true, graphics: true, ..self.fresh() };
+                        return Effect::None;
+                    }
+                    Row::Hud => {
+                        if i != Input::Accept {
+                            return Effect::None;
+                        }
+                        *self = Self { open: true, hud: true, ..self.fresh() };
                         return Effect::None;
                     }
                     Row::Controls => {
@@ -601,6 +680,35 @@ mod tests {
         // Back returns to the main page at "Graphics...".
         o.input(Input::Back, &mut s, &mut b);
         assert!(o.open && o.lines(&s, &b).iter().any(|l| l == "> Graphics..."));
+    }
+
+    /// NATIVE (this fork, decisions/0011): the HUD layout page.
+    #[test]
+    fn hud_layout_rows() {
+        let (mut o, mut s, mut b) = open();
+        o.cursor = MAIN.iter().position(|r| *r == Row::Hud).unwrap();
+        assert!(o.lines(&s, &b).iter().any(|l| l == "> HUD layout..."));
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::None);
+        assert!(o.lines(&s, &b).iter().any(|l| l == "> HUD size             100 %"));
+        // Left: smaller; Right and Enter: larger, from 100 round to 50.
+        assert_eq!(o.input(Input::Left, &mut s, &mut b), Effect::Changed);
+        assert_eq!(s.hud_size, 90);
+        o.input(Input::Right, &mut s, &mut b);
+        o.input(Input::Accept, &mut s, &mut b);
+        assert_eq!(s.hud_size, 50);
+        o.input(Input::Down, &mut s, &mut b);
+        assert!(o.lines(&s, &b).iter().any(|l| l == "> Panels at the edges  On"));
+        o.input(Input::Accept, &mut s, &mut b);
+        o.input(Input::Down, &mut s, &mut b);
+        o.input(Input::Right, &mut s, &mut b);
+        assert!(!s.hud_edges && !s.hud_hide_empty);
+        assert!(o.lines(&s, &b).iter().any(|l| l.starts_with("Hide empty panels: no panel")));
+        // Back returns to the main page at "HUD layout..."; Original
+        // presentation restores the original layout.
+        o.input(Input::Back, &mut s, &mut b);
+        assert!(o.open && o.lines(&s, &b).iter().any(|l| l == "> HUD layout..."));
+        let back = Settings { hud_size: 60, hud_edges: true, ..s.clone() }.with_baseline_presentation();
+        assert!(back.hud_size == 100 && !back.hud_edges && !back.hud_hide_empty);
     }
 
     /// NATIVE (this fork): the texture folder rows. The folder is a stored

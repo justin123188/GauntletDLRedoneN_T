@@ -6,6 +6,12 @@ private/reports/ghidra-hud1..4) and checked against the Tower GS dump
 private/reference/captures/render/tower-newgame-v1-240.png). Port:
 `gdl_core::game::hud` (data) and gdl_play's `present_hud` (sprites).
 
+NATIVE (this fork, decisions/0011): blits and messages carry a
+presentation-only `panel` tag (hud::PanelPart: the box a panel blit, its
+text or a help box over it belongs to) for gdl_client::hud_layout's HUD
+size, edge and empty-panel options. Nothing in the simulation reads it;
+with the original layout the panels draw as described here.
+
 ## Blit layer
 
 - MBNewBlit 0x1c2b00 appends a 0x38-byte blit to the default node: word 0

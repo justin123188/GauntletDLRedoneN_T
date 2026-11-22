@@ -91,6 +91,16 @@ pub struct Settings {
     pub camera_follow_rails: bool,
     /// The free camera turns the other way for the same stick direction.
     pub camera_invert: bool,
+    /// NATIVE (this fork, decisions/0011; gdl_client::hud_layout): the
+    /// player panels' size, percent (50..100; 100: the original).
+    pub hud_size: u32,
+    /// NATIVE (this fork): in widescreen the panels spread over the
+    /// window's width, player 1's at the left edge and player 4's at the
+    /// right (off: together in the frame's middle).
+    pub hud_edges: bool,
+    /// NATIVE (this fork): no panel for a player not in the game; it comes
+    /// back when the player joins.
+    pub hud_hide_empty: bool,
 }
 
 /// Settings::camera.
@@ -138,6 +148,11 @@ impl Default for Settings {
             camera: CameraMode::Free,
             camera_follow_rails: true,
             camera_invert: false,
+            // The owner's choice (2026-11-22): panels at the edges and no
+            // empty panels; the size stays the original until chosen.
+            hud_size: 100,
+            hud_edges: true,
+            hud_hide_empty: true,
         }
     }
 }
@@ -183,7 +198,19 @@ impl Settings {
     /// These settings with the original presentation (see `baseline`);
     /// window, sync, controls and the button prompts are kept.
     pub fn with_baseline_presentation(&self) -> Self {
-        Self { interpolate: false, widescreen: false, msaa: 1, smaa: false, reduce_flashes: false, texture_pack: None, texture_pack_folder: false, ..self.with_graphics(Graphics::Original) }
+        Self {
+            interpolate: false,
+            widescreen: false,
+            msaa: 1,
+            smaa: false,
+            reduce_flashes: false,
+            texture_pack: None,
+            texture_pack_folder: false,
+            hud_size: 100,
+            hud_edges: false,
+            hud_hide_empty: false,
+            ..self.with_graphics(Graphics::Original)
+        }
     }
 
     /// The MSAA sample count the window cameras use: 1 with SMAA or with
@@ -267,6 +294,7 @@ impl Settings {
         };
         self.frame_queue = self.frame_queue.clamp(1, 3);
         self.sharpen = self.sharpen.min(100);
+        self.hud_size = self.hud_size.clamp(50, 100);
         if 0 < self.fps_cap {
             self.fps_cap = self.fps_cap.clamp(30, 1000);
         }
@@ -299,6 +327,13 @@ mod tests {
         assert!(!b.interpolate && !b.widescreen && b.msaa == 1 && b.texture_pack.is_none() && b.button_prompts == Prompts::PlayStation);
         // NATIVE (this fork): the texture_pack folder is a remaster default only.
         assert!(!b.texture_pack_folder && Settings::default().texture_pack_folder);
+        // NATIVE (this fork): the HUD layout options.
+        assert!(b.hud_size == 100 && !b.hud_edges && !b.hud_hide_empty);
+        let d = Settings::default();
+        assert!(d.hud_size == 100 && d.hud_edges && d.hud_hide_empty);
+        let mut h: Settings = serde_json::from_str(r#"{"hud_size": 20}"#).unwrap();
+        h.sanitise();
+        assert_eq!(h.hud_size, 50);
     }
 
     #[test]

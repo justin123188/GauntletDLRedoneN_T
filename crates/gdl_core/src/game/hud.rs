@@ -113,12 +113,28 @@ pub struct Blit {
     /// AREF 0) in front: this blit is hidden where that texture's alpha is 0
     /// over the screen rectangle (x, y, w, h). The fire scroll's masks.
     pub mask: Option<(TexRef, [f32; 4])>,
+    /// NATIVE (presentation only): the player box it belongs to (PanelPart).
+    pub panel: Option<PanelPart>,
+}
+
+/// NATIVE (this fork, presentation only; decisions/0011): the player box
+/// (0..3) a blit or message belongs to, for gdl_play's HUD layout options
+/// (a smaller HUD, panels at the screen's edges, empty panels hidden). Set
+/// where the panel code makes them; the simulation never reads it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelPart {
+    /// The box's panel: reset_players_sub's blits, WritePlayerInfo's temp
+    /// blits and text (show_crystals included), the It marker and
+    /// do_got_it's notices.
+    Panel(u8),
+    /// A help box NewHelp placed over the box (box_cx, no world point).
+    Over(u8),
 }
 
 impl Blit {
     fn init() -> Self {
         // MBInitBlit: flags 0, no texture, colours 0x80808080.
-        Self { flags: 0, tex: None, x: 0.0, y: 0.0, w: 0.0, h: 0.0, crop: [0.0, 1.0, 0.0, 1.0], rgba: [0x80; 4], corners: [[0x80; 4]; 3], z: 0.0, mask: None }
+        Self { flags: 0, tex: None, x: 0.0, y: 0.0, w: 0.0, h: 0.0, crop: [0.0, 1.0, 0.0, 1.0], rgba: [0x80; 4], corners: [[0x80; 4]; 3], z: 0.0, mask: None, panel: None }
     }
     pub fn hidden(&self) -> bool {
         self.flags & 1 != 0
@@ -251,6 +267,8 @@ pub struct Message {
     /// Message +0x26: a texture replacing the font's (DrawGlowText's
     /// hilite_tex); the glyph crop is kept.
     pub tex: Option<TexRef>,
+    /// NATIVE (presentation only): the player box it belongs to (PanelPart).
+    pub panel: Option<PanelPart>,
 }
 
 /// A loaded font (font_init_desc + MBNewFont).
@@ -436,7 +454,7 @@ const QUIT_GAME: &str = "Quit Game"; // 0x2a7420
 const IN_TOWER: &str = "IN TOWER"; // 0x2a7430
 /// MBSetFontZ(63990.0) and the panel blits' MBBlitSetZ(64000.0).
 const FONT_Z: f32 = 63990.0;
-const PANEL_Z: f32 = 64000.0;
+pub const PANEL_Z: f32 = 64000.0;
 
 #[derive(Clone, Debug, Default)]
 pub struct Hud {
@@ -506,6 +524,9 @@ pub struct HelpState {
     pub testflag: bool,
     pub colour: u32,
     border: Option<usize>,
+    /// NATIVE (presentation only): the box the message is over
+    /// (PanelPart::Over).
+    over: Option<u8>,
 }
 
 impl Hud {
@@ -664,6 +685,24 @@ impl Hud {
         b.flags = 0;
         self.temp.push(b);
         self.temp.len() - 1
+    }
+
+    /// NATIVE (presentation only): marks a node blit as part of a box.
+    fn tag(&mut self, id: usize, part: PanelPart) {
+        if let Some(Some(b)) = self.blits.get_mut(id) {
+            b.panel = Some(part);
+        }
+    }
+
+    /// NATIVE (presentation only): marks the temp blits and messages made
+    /// since there were `(temp, messages)` as part of a box.
+    fn tag_since(&mut self, (temp, messages): (usize, usize), part: PanelPart) {
+        for b in self.temp.iter_mut().skip(temp) {
+            b.panel = Some(part);
+        }
+        for m in self.messages.iter_mut().skip(messages) {
+            m.panel = Some(part);
+        }
     }
 
     fn remove(&mut self, id: usize) {
@@ -1115,6 +1154,7 @@ impl Hud {
                 corners: [[0x80; 4]; 3],
                 z: m.z,
                 mask: None,
+                panel: m.panel,
             };
             if m.flags & 0x4000 != 0 {
                 b.x -= gx;
@@ -1133,7 +1173,7 @@ impl Hud {
     fn message(&self, scale: f32, space: f32, x: i32, y: i32, font: usize, rgba: [u8; 4], z: f32, flags: u32, text: &str) -> Option<Message> {
         let text = text.as_bytes().to_vec();
         let x = if x < 0 { -(self.string_width(font, space, &text) >> 1) - x } else { x };
-        (y as u32 <= 0x17f).then_some(Message { x, y, font, rgba, scale_x: scale, scale_y: scale, space_x: space, z, flags, text, tex: None })
+        (y as u32 <= 0x17f).then_some(Message { x, y, font, rgba, scale_x: scale, scale_y: scale, space_x: space, z, flags, text, tex: None, panel: None })
     }
 
     /// FontHeight(scale, font): (int)(height × scale).
@@ -1510,6 +1550,9 @@ impl Game {
         pb.quest = h.new_blit(None, lx + 0x68, 0x152, 0x10, 0x10);
         h.set_hide(pb.quest, true);
         h.set_z(pb.quest, PANEL_Z);
+        for &b in pb.bkg.iter().chain(&pb.rune).chain(&pb.key).chain(&pb.ability).chain(&pb.turbo).chain([&pb.level, &pb.rune13, &pb.quest]) {
+            h.tag(b, PanelPart::Panel(p as u8));
+        }
         h.players.push(pb);
     }
 
@@ -1638,14 +1681,14 @@ impl Game {
                 continue;
             }
             self.players[p].or_u16(o::WRITTEN, 1);
-            match self.players[p].i32_(o::DISPLAY_MODE) {
-                0 | 3 => {}
-                6 | 10 => self.write_health_and_items(p)?,
-                _ => {
-                    self.write_health_and_items(p)?;
-                    self.show_crystals(p);
-                }
-            }
+            let made = (self.hud.temp.len(), self.hud.messages.len());
+            let r = match self.players[p].i32_(o::DISPLAY_MODE) {
+                0 | 3 => Ok(()),
+                6 | 10 => self.write_health_and_items(p),
+                _ => self.write_health_and_items(p).map(|()| self.show_crystals(p)),
+            };
+            self.hud.tag_since(made, PanelPart::Panel(p as u8));
+            r?;
         }
         if player < 0 {
             self.show_rune_stones();
@@ -1659,6 +1702,7 @@ impl Game {
                 let b = self.hud.new_blit(tex, t + 0x22, -0x15d, -1, -1);
                 self.hud.set_size(b, 0x20, 0x20);
                 self.hud.set_z(b, PANEL_Z);
+                self.hud.tag(b, PanelPart::Panel(it as u8 & 3));
                 self.hud.it_blit = Some(b);
             }
         }
@@ -2057,8 +2101,16 @@ impl Game {
         self.hud.set_size(b, bw, bh);
         self.hud.set_alpha(b, 0x40);
         self.hud.set_hide(b, false);
+        let over = match (player, at) {
+            (Some(k), None) => Some(k as u8 & 3),
+            _ => None,
+        };
+        if let Some(k) = over {
+            self.hud.tag(b, PanelPart::Over(k));
+        }
         let lv = self.players[p].i32_(o::LEVEL);
         let hs = &mut self.hud.help;
+        hs.over = over;
         hs.border = Some(b);
         hs.x = cx;
         hs.y = cy;
@@ -2124,6 +2176,16 @@ impl Game {
             return;
         }
         let (x, y, c) = (-hs.x, hs.y | 0x1000, hs.colour);
+        let made = (self.hud.temp.len(), self.hud.messages.len());
+        self.write_help_lines(&hs, h, (x, y, c));
+        if let Some(k) = hs.over {
+            self.hud.tag_since(made, PanelPart::Over(k));
+        }
+    }
+
+    /// write_text's lines (write_help_text; NATIVE split so the lines can
+    /// be tagged).
+    fn write_help_lines(&mut self, hs: &HelpState, h: [i32; 7], (x, y, c): (i32, i32, u32)) {
         let class = self.players[hs.player].i32_(o::CLASS);
         let colour_idx = self.players[hs.player].i32_(o::COLOUR);
         let name = |hud: &Hud, e: i32, l: i32| Arg::S(hud.string_text(e, l).unwrap_or_default());
@@ -2242,6 +2304,9 @@ impl Game {
                     self.hud.set_pos(bar, 63980.0, x, 0x180);
                     self.hud.set_size(pic, 0x80, 0);
                     self.hud.set_pos(pic, 63979.0, x, 400);
+                    for b in [bar, pic] {
+                        self.hud.tag(b, PanelPart::Panel(g.player as u8 & 3));
+                    }
                     let n = &mut self.hud.got_it[i];
                     n.bar = Some(bar);
                     n.picture = Some(pic);
@@ -2388,6 +2453,27 @@ mod tests {
         h.begin_frame();
         h.draw_text(1.0, -0x40, 0x146, 4, 0xffffff, "00");
         assert_eq!(h.messages[0].x, 0x40 - 8);
+    }
+
+    #[test]
+    fn panel_tags_reach_the_draw_list() {
+        // NATIVE (decisions/0011): the box a blit or text belongs to.
+        let mut h = Hud { font_z: FONT_Z, ..Default::default() };
+        let info = |l: &str| TexInfo { label: l.into(), width: 128, height: 16, flags: 0x8c, def_width: 128, def_height: 16 };
+        h.set_resources(vec![TexSet { name: "STATIC".into(), records: vec![info("SCORE")], names: vec![("SCORE".into(), 0)] }], vec![]);
+        h.fonts = vec![None, None, None, None, Some(HudFont { font: font(), tex: h.index.get("SCORE").copied(), space: 9, per_page: 0x80 })];
+        let node = h.new_blit(None, 0x80, 0x140, 0x80, 0x10);
+        h.tag(node, PanelPart::Panel(1));
+        h.new_blit(None, 0, 0, 8, 8);
+        let made = (h.temp.len(), h.messages.len());
+        h.temp_blit(None, 0x86, 0x14c, 0xe, 0xe);
+        h.draw_text(1.0, 0x80, 0x167, 4, 0xffffff, "50");
+        h.tag_since(made, PanelPart::Over(1));
+        h.temp_blit(None, 0, 0, 4, 4);
+        let parts: Vec<_> = h.draw_list().iter().map(|b| b.panel).collect();
+        let (p, o) = (Some(PanelPart::Panel(1)), Some(PanelPart::Over(1)));
+        // Node blits, temp blits, then the glyphs of "50".
+        assert_eq!(parts, vec![p, None, o, None, o, o]);
     }
 
     #[test]

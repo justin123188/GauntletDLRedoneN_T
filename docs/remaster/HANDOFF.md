@@ -266,7 +266,9 @@ later. And effects look better mostly through their textures.
 ## 8. Roadmap after textures (owner's priorities, my recommendation)
 
 1. **Quality-of-life for big screens:**
-   - HUD and text scaling (missing: the HUD is a fixed 512×384 layout).
+   - HUD layout: done 2026-11-22 (decisions/0011; the owner chose a
+     smaller HUD, panels at the edges and no empty panels; F10 → "HUD
+     layout..."). Text scaling was offered and not chosen.
    - Controller button remapping (missing).
    - Camera recentre and tilt; maybe mouse camera.
 2. **Models:** a replacement system.
@@ -317,4 +319,6 @@ memory. The port stays the base.
       jeddhor/GauntletDLRedone#1, open, no comments or reviews on
       2026-11-22. Check again later.
 - [ ] Texture phase (§7): tasks 1–3 done 2026-11-22; the owner's art next.
+- [ ] HUD layout (§8, decisions/0011): built and checked 2026-11-22; the
+      owner's playtest next.
 - [ ] Camera follow-ups (§3) as the owner asks.
