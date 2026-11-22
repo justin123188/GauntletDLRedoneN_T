@@ -47,8 +47,8 @@ guest's rounding subset); the stick decomposition uses the port's own
 sinf/cosf. Inputs come from the ports only, so a run is reproducible from
 its inputs.
 
-Not done: pitch control, recentre button, mouse control, exchanging the
-setting in network play, per-level limits for views that show unfinished
-geometry. Verification: synthetic unit tests (FreeCam bounds, the overlay
+Not done: mouse control, exchanging the setting in network play,
+per-level limits for views that show unfinished geometry. (Recentre and a
+tilt with the zoom: decisions/0014.) Verification: synthetic unit tests (FreeCam bounds, the overlay
 rows); the owner's playtest on Windows (2026-11-22, test build 2): the
 right stick turns and zooms the camera in play.

@@ -156,7 +156,7 @@ impl W {
         self.0.extend_from_slice(v);
     }
     fn pad(&mut self, p: &PadStatus) {
-        self.u8(u8::from(p.connected) | u8::from(p.analog) << 1 | u8::from(p.has_stick) << 2);
+        self.u8(u8::from(p.connected) | u8::from(p.analog) << 1 | u8::from(p.has_stick) << 2 | u8::from(p.camera_recentre) << 3);
         for e in &p.entries {
             self.0.extend_from_slice(e);
         }
@@ -193,7 +193,7 @@ impl Rd<'_> {
     }
     fn pad(&mut self) -> Result<PadStatus, String> {
         let f = self.u8()?;
-        let mut p = PadStatus { connected: f & 1 != 0, analog: f & 2 != 0, has_stick: f & 4 != 0, ..Default::default() };
+        let mut p = PadStatus { connected: f & 1 != 0, analog: f & 2 != 0, has_stick: f & 4 != 0, camera_recentre: f & 8 != 0, ..Default::default() };
         for e in &mut p.entries {
             e.copy_from_slice(self.take(2)?);
         }

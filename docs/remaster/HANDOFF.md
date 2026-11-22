@@ -68,9 +68,12 @@ Full rationale: `docs/decisions/0008-free-camera.md`.
   changes, so the upstream fidelity checks (sim hashes, replays) still hold.
 - **Status:** unit tests pass, and the owner confirmed in play that it works
   (test build 2).
-- **Open ideas:** pitch/tilt control, a recentre button, mouse control,
-  exchanging the setting in network play, free camera in boss fights, limits
-  where turning reveals unfinished geometry (no reports yet).
+- **Recentre and tilt** (2026-11-22, decisions/0014): the right stick click
+  (numpad 5) swings back to the level's direction, held it returns the zoom
+  too; the view tilts with the zoom (lower when close, steeper when far).
+- **Open ideas:** mouse control, exchanging the setting in network play,
+  free camera in boss fights, limits where turning reveals unfinished
+  geometry (no reports yet).
 
 ### Windows sound fix
 Notes: `docs/research/audio.md`, "Windows output: any device format".
@@ -275,7 +278,8 @@ later. And effects look better mostly through their textures.
      layout..."). Text scaling was offered and not chosen.
    - Controller buttons: done 2026-11-22 (decisions/0012; one layout for
      every controller, in play only; F10 → "Controller buttons...").
-   - Camera recentre and tilt; maybe mouse camera.
+   - Camera recentre and tilt: done 2026-11-22 (decisions/0014; the right
+     stick click, tilt with the zoom). Maybe mouse camera later.
 2. **Models:** a replacement system.
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
@@ -326,8 +330,10 @@ memory. The port stays the base.
 - [ ] Texture phase (§7): tasks 1–3 done 2026-11-22; the owner's art next.
 - [x] HUD layout (§8, decisions/0011): the owner's playtest 2026-11-22,
       "Everything looks good so far".
-- [ ] Controller buttons (§8, decisions/0012): built 2026-11-22; the
-      owner's playtest with a real controller next.
+- [x] Controller buttons (§8, decisions/0012): the owner uses them with an
+      Xbox One controller (2026-11-22).
+- [ ] Camera recentre and tilt (decisions/0014): built 2026-11-22; the
+      owner's playtest next.
 - [x] Sharper fonts (decisions/0013): the owner's playtest 2026-11-22 with
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
 - [ ] Camera follow-ups (§3) as the owner asks.

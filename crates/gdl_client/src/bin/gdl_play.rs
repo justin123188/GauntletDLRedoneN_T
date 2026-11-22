@@ -3823,8 +3823,12 @@ enum MovieThen {
 /// gamepads' buttons from `bindings.pad`, else the standard layout.
 fn player_input(slot: usize, keys: &ButtonInput<KeyCode>, pads: &[&Gamepad], bindings: &gdl_client::controls::Bindings, keyboard: bool, remap: bool) -> PadStatus {
     let mut s = PadStatus { connected: true, ..Default::default() };
+    // NATIVE (this fork, decisions/0014): controls::RECENTRE is the free
+    // camera's recentre button, not a PS2 entry.
     let press = |s: &mut PadStatus, i: usize, on: bool| {
-        if on {
+        if on && i == gdl_client::controls::RECENTRE {
+            s.camera_recentre = true;
+        } else if on {
             s.press(i);
         }
     };
@@ -7220,7 +7224,16 @@ fn simulate(
                 for &i in entries.iter().filter(|&&i| i < 0x16) {
                     p.press(i);
                 }
+                // NATIVE (this fork, decisions/0014): 0x16 the free
+                // camera's recentre button.
+                p.camera_recentre |= entries.contains(&gdl_client::controls::RECENTRE);
             }
+        }
+        // Right-stick entries: an analog pad with its stick, as the
+        // keyboard's right-stick keys (full deflection).
+        if p.entries[0xe..=0x11].iter().any(|e| e[0] != 0) {
+            p.analog = true;
+            p.has_stick = true;
         }
         ports[0] = p;
     }
@@ -12775,7 +12788,10 @@ mod tests {
                 assert_eq!(pressed(&player_input(0, &keys, &[&g], &standard, true, remap)), [entry], "{b:?}");
             }
         }
-        assert!(pressed(&player_input(0, &keys, &[&with(GamepadButton::RightThumb)], &standard, true, true)).is_empty());
+        // The right stick click: the free camera's recentre, no PS2 entry.
+        let rs = player_input(0, &keys, &[&with(GamepadButton::RightThumb)], &standard, true, true);
+        assert!(pressed(&rs).is_empty() && rs.camera_recentre);
+        assert!(!player_input(0, &keys, &[&with(GamepadButton::South)], &standard, true, true).camera_recentre);
         // Attack on RB (strafe takes A): in play only.
         let mut b = standard.clone();
         b.bind_pad(ACTIONS.iter().position(|a| a.name == "cross").unwrap(), GamepadButton::RightTrigger);

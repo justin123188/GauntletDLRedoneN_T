@@ -334,3 +334,8 @@ Not part of the original game. With Settings::camera "free" UpdateCam adds
 the player's yaw offset to the view (CamUpdate, CalcFrustrumNormals) and
 scales the follow distance and limit radius by the zoom (CalcDist,
 UpdateCam). Off, CamCtx::free is None and every step above is unchanged.
+Since decisions/0014 CamUpdate's look direction also takes a tilt with
+the zoom (FreeView::pitch, 0.3 x ln(zoom) radians off the record's pitch,
+within -0.25..-1.4 unless the rails' pitch is beyond), and a recentre
+button (PadStatus::camera_recentre) swings the yaw offset back to 0 (held:
+the zoom to 1 too).

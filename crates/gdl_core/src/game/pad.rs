@@ -29,6 +29,11 @@ pub struct PadStatus {
     pub analog: bool,
     pub has_stick: bool,
     pub entries: [[u8; 2]; 0x16],
+    /// NATIVE (this fork, decisions/0014): the free camera's recentre
+    /// button (not a PS2 entry; a controller's right stick click by
+    /// default). Read only by the free camera.
+    #[serde(default)]
+    pub camera_recentre: bool,
 }
 
 impl PadStatus {
@@ -172,6 +177,10 @@ pub struct Controls {
     /// 0x210820: joyGetStatus's count of polls a port answered with no pad.
     #[serde(default)]
     pub lost_polls: [i32; 8],
+    /// NATIVE (this fork, decisions/0014): each port's free camera
+    /// recentre button this update (PadStatus::camera_recentre).
+    #[serde(default)]
+    pub camera_recentre: [bool; 8],
     pub soft_reset: [i32; 8],
     pub updated: bool,
     /// SpecialMoves (per player 13 × (step, count)).
@@ -202,6 +211,7 @@ impl Default for Controls {
             joy_assigned: [-1; 8],
             controller_lost: 0,
             lost_polls: [0; 8],
+            camera_recentre: [false; 8],
             soft_reset: [0; 8],
             updated: false,
             special_moves: [[[0; 2]; 13]; 4],
@@ -329,6 +339,7 @@ impl Controls {
     /// ControlsUpdate 0x104130 (one call per vblank batch; ctrls_initialized).
     pub fn controls_update(&mut self, pads: &[PadStatus; 8]) -> R<()> {
         for (port, pad) in pads.iter().enumerate() {
+            self.camera_recentre[port] = pad.connected && pad.camera_recentre;
             if !pad.connected {
                 self.pad_missing(port);
                 continue;

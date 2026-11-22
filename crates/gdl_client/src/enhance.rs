@@ -410,8 +410,9 @@ impl Overlay {
         }
         out.push(String::new());
         if matches!(MAIN.get(self.cursor), Some(Row::Camera | Row::CameraRails | Row::CameraInvert)) {
-            out.push("Free camera: right stick turns (left/right) and zooms (up/down);".to_string());
-            out.push("keyboard: numpad 4/6 turn, 8/2 zoom. Not used in network play.".to_string());
+            out.push("Free camera: right stick turns (left/right) and zooms (up/down; the".to_string());
+            out.push("view tilts with the zoom). Click the stick: back to the level's".to_string());
+            out.push("direction; hold: the zoom too. Numpad 4/6, 8/2, 5. Off in network play.".to_string());
         }
         // NATIVE (this fork): the pack in use (gdl_play reports it), else the setting's path.
         let pack = self.textures.pack.clone().or_else(|| s.texture_pack.as_ref().map(|p| p.display().to_string()));

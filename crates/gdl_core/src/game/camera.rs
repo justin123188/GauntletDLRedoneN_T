@@ -328,6 +328,9 @@ pub struct FreeView {
     pub yaw: f32,
     pub zoom: f32,
     pub follow_rails: bool,
+    /// NATIVE (this fork, decisions/0014): radians the view looks down
+    /// more than the rails' pitch (negative: less steep; FreeCam::tilt).
+    pub pitch: f32,
 }
 
 /// NATIVE: the player-controlled camera (Game::free_cam; decisions/0008).
@@ -352,11 +355,18 @@ pub struct FreeCam {
     /// level's Game starts with a fresh FreeCam).
     #[serde(skip)]
     pub carried: bool,
+    /// NATIVE (this fork, decisions/0014): updates the recentre button has
+    /// been held, and the swing back it started (0 none, 1 the direction,
+    /// 2 the direction and the zoom).
+    #[serde(skip)]
+    pub held: u16,
+    #[serde(skip)]
+    pub swing: u8,
 }
 
 impl Default for FreeCam {
     fn default() -> Self {
-        Self { enabled: false, follow_rails: true, invert_turn: false, yaw: 0.0, zoom: 1.0, carried: false }
+        Self { enabled: false, follow_rails: true, invert_turn: false, yaw: 0.0, zoom: 1.0, carried: false, held: 0, swing: 0 }
     }
 }
 
@@ -370,10 +380,48 @@ impl FreeCam {
     pub const ZOOM_RATE: f32 = 0.022;
     /// Stick magnitude below which the stick counts as centred.
     pub const DEAD_ZONE: f32 = 0.3;
+    /// NATIVE (decisions/0014): the tilt per natural log of the zoom
+    /// (radians): closest −0.18 (lower), farthest +0.24 (steeper).
+    pub const TILT: f32 = 0.3;
+    /// The recentre swing per 30 Hz update: the turn (radians; half a turn
+    /// in about 0.3 s) and the zoom's factor towards 1.
+    pub const RECENTRE_TURN: f32 = 0.35;
+    pub const RECENTRE_ZOOM: f32 = 0.12;
+    /// Updates the recentre button is held before the zoom (and its tilt)
+    /// return too (0.6 s).
+    pub const LONG_PRESS: u16 = 18;
+    /// The pitch the tilt goes no further than (radians; the view looks
+    /// down by 14° at least and 80° at most), unless the rails' is beyond.
+    pub const FLATTEST: f32 = -0.25;
+    pub const STEEPEST: f32 = -1.4;
 
     /// The view UpdateCam applies (None when off).
     pub fn view(&self) -> Option<FreeView> {
-        self.enabled.then_some(FreeView { yaw: self.yaw, zoom: self.zoom, follow_rails: self.follow_rails })
+        self.enabled.then_some(FreeView { yaw: self.yaw, zoom: self.zoom, follow_rails: self.follow_rails, pitch: self.tilt() })
+    }
+
+    /// The tilt that goes with the zoom: closer looks lower (towards the
+    /// players' backs), farther looks steeper (radians; 0 at the original
+    /// distance).
+    pub fn tilt(&self) -> f32 {
+        if self.zoom == 1.0 { 0.0 } else { Self::TILT * self.zoom.ln() }
+    }
+
+    /// The recentre button this update (`k` the update's length in 30 Hz
+    /// updates): a press starts the swing back to the rails' direction;
+    /// held LONG_PRESS updates, the zoom returns too.
+    pub fn recentre_input(&mut self, held: bool, k: f32) {
+        if !held {
+            self.held = 0;
+            return;
+        }
+        if self.held == 0 {
+            self.swing = self.swing.max(1);
+        }
+        self.held = self.held.saturating_add(k.round().max(1.0) as u16);
+        if Self::LONG_PRESS <= self.held {
+            self.swing = 2;
+        }
     }
 
     /// One update's input: `turn` and `zoom_in` in −1..1 (stick right and
@@ -388,6 +436,29 @@ impl FreeCam {
         }
         self.yaw = yaw;
         self.zoom = (self.zoom * (1.0 - zoom_in * Self::ZOOM_RATE * k)).clamp(Self::ZOOM_MIN, Self::ZOOM_MAX);
+        // NATIVE (decisions/0014): the recentre swing; the stick takes over.
+        if turn != 0.0 || zoom_in != 0.0 {
+            self.swing = 0;
+        }
+        if 0 < self.swing {
+            let d = Self::RECENTRE_TURN * k;
+            self.yaw = if self.yaw.abs() <= d { 0.0 } else { self.yaw - d * self.yaw.signum() };
+        }
+        if self.swing == 2 {
+            let f = 1.0 + Self::RECENTRE_ZOOM * k;
+            self.zoom = if self.zoom < 1.0 { (self.zoom * f).min(1.0) } else { (self.zoom / f).max(1.0) };
+        }
+        if self.yaw == 0.0 && (self.swing < 2 || self.zoom == 1.0) {
+            self.swing = 0;
+        }
+    }
+
+    /// The pitch the view uses for the rails' `pitch` and a `tilt` (more
+    /// than 0: steeper; negative pitches look down), kept between FLATTEST
+    /// and STEEPEST unless the rails' pitch is already beyond.
+    pub fn tilted(pitch: f32, tilt: f32) -> f32 {
+        let v = pitch - tilt;
+        if tilt < 0.0 { v.min(pitch.max(Self::FLATTEST)) } else { v.max(pitch.min(Self::STEEPEST)) }
     }
 
     /// Back to the original framing (the level start keeps the zoom).
@@ -906,6 +977,15 @@ impl Camera {
         }
     }
 
+    /// The pitch the view uses: the record's, tilted with the free
+    /// camera's zoom (NATIVE, decisions/0014) when it is on and zoomed.
+    fn view_pitch(ctx: &CamCtx, c: &Record) -> f32 {
+        match ctx.free {
+            Some(f) if f.pitch != 0.0 => FreeCam::tilted(c.f32_(o::PITCH), f.pitch),
+            _ => c.f32_(o::PITCH),
+        }
+    }
+
     /// LookInDirection 0x1d.. (the same algorithm as CamLookInDir) for the
     /// old camera.
     pub(crate) fn look_in_dir_pub(c: &mut Record, dir: V3) -> R<()> {
@@ -1019,7 +1099,7 @@ impl Camera {
 
     /// CamUpdate 0x1140f0.
     fn cam_update(&mut self, ctx: &CamCtx, c: &mut Record) -> R<()> {
-        let look = Self::calc_lookdir(Self::view_yaw(ctx, c)?, c.f32_(o::PITCH))?;
+        let look = Self::calc_lookdir(Self::view_yaw(ctx, c)?, Self::view_pitch(ctx, c))?;
         c.set_v3(o::LOOK, look);
         let (mut eye, mut target) = (c.v3(o::EYE), c.v3(o::TARGET));
         self.do_shake(ctx, &mut eye, &mut target)?;
@@ -2426,12 +2506,15 @@ impl super::Game {
     /// stick up zooms in.
     fn free_cam_input(&mut self) -> R<()> {
         let (mut turn, mut zoom_in) = (0.0f32, 0.0f32);
+        let mut recentre = false;
         for k in 0..4 {
             let Ok(port) = usize::try_from(self.controls.joy_remap[k]) else { continue };
             let mode = self.controls.control[k].i32_(0x2c);
             if mode == 2 || mode == 3 {
                 continue;
             }
+            // NATIVE (decisions/0014): the recentre button.
+            recentre |= self.controls.camera_recentre.get(port).copied().unwrap_or(false);
             let Some(&[a, m]) = self.controls.analog_right.get(port) else { continue };
             if m <= FreeCam::DEAD_ZONE {
                 continue;
@@ -2442,6 +2525,7 @@ impl super::Game {
             zoom_in -= cosf(a)? * s;
         }
         let k = if 0.0 < self.globals.spf { (self.globals.spf * 30.0).min(4.0) } else { 1.0 };
+        self.free_cam.recentre_input(recentre, k);
         self.free_cam.step(turn.clamp(-1.0, 1.0), zoom_in.clamp(-1.0, 1.0), k);
         Ok(())
     }
@@ -2852,7 +2936,7 @@ mod tests {
         let mut f = FreeCam::default();
         assert_eq!(f.view(), None);
         f.enabled = true;
-        assert_eq!(f.view(), Some(FreeView { yaw: 0.0, zoom: 1.0, follow_rails: true }));
+        assert_eq!(f.view(), Some(FreeView { yaw: 0.0, zoom: 1.0, follow_rails: true, pitch: 0.0 }));
         for _ in 0..200 {
             f.step(1.0, 0.0, 1.0);
             assert!((-PI..=PI).contains(&f.yaw));
@@ -2872,5 +2956,49 @@ mod tests {
         f.invert_turn = true;
         f.step(1.0, 0.0, 1.0);
         assert!(f.yaw < 0.0);
+    }
+
+    /// NATIVE (decisions/0014): the recentre button and the tilt.
+    #[test]
+    fn free_cam_recentre_and_tilt() {
+        let mut f = FreeCam { enabled: true, yaw: 2.0, zoom: 2.0, ..FreeCam::default() };
+        // Zoomed out: steeper; in: lower; the original distance: none.
+        assert!(0.0 < f.tilt());
+        assert!(FreeCam { zoom: 0.6, ..f }.tilt() < 0.0);
+        assert_eq!(FreeCam { zoom: 1.0, ..f }.tilt(), 0.0);
+        assert_eq!(f.view().unwrap().pitch, f.tilt());
+        // A quick press: the direction swings back, the zoom stays.
+        f.recentre_input(true, 1.0);
+        f.step(0.0, 0.0, 1.0);
+        assert!(0.0 < f.yaw && f.yaw < 2.0);
+        f.recentre_input(false, 1.0);
+        for _ in 0..10 {
+            f.step(0.0, 0.0, 1.0);
+        }
+        assert_eq!((f.yaw, f.zoom, f.swing), (0.0, 2.0, 0));
+        // Held: the zoom returns too.
+        f.yaw = -1.0;
+        for _ in 0..FreeCam::LONG_PRESS {
+            f.recentre_input(true, 1.0);
+            f.step(0.0, 0.0, 1.0);
+        }
+        assert_eq!(f.swing, 2);
+        for _ in 0..30 {
+            f.recentre_input(true, 1.0);
+            f.step(0.0, 0.0, 1.0);
+        }
+        assert_eq!((f.yaw, f.zoom, f.swing), (0.0, 1.0, 0));
+        // The stick stops a swing.
+        f.recentre_input(false, 1.0);
+        f.yaw = 1.0;
+        f.recentre_input(true, 1.0);
+        f.step(0.5, 0.0, 1.0);
+        assert_eq!(f.swing, 0);
+        // The tilt's pitch: no tilt keeps the rails'; limits unless beyond.
+        assert_eq!(FreeCam::tilted(-0.7, 0.0), -0.7);
+        assert!((FreeCam::tilted(-0.7, 0.2) + 0.9).abs() < 1e-6);
+        assert_eq!(FreeCam::tilted(-0.3, -0.2), FreeCam::FLATTEST);
+        assert_eq!(FreeCam::tilted(-0.2, -0.2), -0.2);
+        assert_eq!(FreeCam::tilted(-1.3, 0.3), FreeCam::STEEPEST);
     }
 }

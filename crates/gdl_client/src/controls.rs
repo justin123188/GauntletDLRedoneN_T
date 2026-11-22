@@ -27,9 +27,13 @@ pub struct Action {
     pub pad: &'static [GamepadButton],
 }
 
+/// NATIVE (this fork, decisions/0014): the `entry` of the free camera's
+/// recentre action — not a PS2 entry: it sets PadStatus::camera_recentre.
+pub const RECENTRE: usize = 0x16;
+
 /// Port 0's actions, in the overlay's order. Labels name the pad button
 /// and what research has measured it doing; square and R2 are named only.
-pub const ACTIONS: [Action; 18] = [
+pub const ACTIONS: [Action; 19] = [
     Action { name: "up", label: "Up", entry: 2, defaults: &[KeyCode::ArrowUp, KeyCode::KeyW], pad: &[GamepadButton::DPadUp] },
     Action { name: "down", label: "Down", entry: 3, defaults: &[KeyCode::ArrowDown, KeyCode::KeyS], pad: &[GamepadButton::DPadDown] },
     Action { name: "left", label: "Left", entry: 0, defaults: &[KeyCode::ArrowLeft, KeyCode::KeyA], pad: &[GamepadButton::DPadLeft] },
@@ -50,6 +54,9 @@ pub const ACTIONS: [Action; 18] = [
     Action { name: "rstick_down", label: "Right stick down", entry: 0x11, defaults: &[KeyCode::Numpad2], pad: &[] },
     Action { name: "rstick_left", label: "Right stick left", entry: 0xe, defaults: &[KeyCode::Numpad4], pad: &[] },
     Action { name: "rstick_right", label: "Right stick right", entry: 0xf, defaults: &[KeyCode::Numpad6], pad: &[] },
+    // NATIVE (this fork, decisions/0014): the free camera's recentre (a
+    // quick press: the direction; held: the zoom and tilt too).
+    Action { name: "camera_recentre", label: "Camera recentre", entry: RECENTRE, defaults: &[KeyCode::Numpad5], pad: &[GamepadButton::RightThumb] },
 ];
 
 /// NATIVE (this fork): the controller buttons that can be bound (the Mode
@@ -283,7 +290,7 @@ mod tests {
         assert_eq!(b.pad[at("cross")], [GamepadButton::RightTrigger]);
         assert_eq!(b.pad[at("r1")], [GamepadButton::South]);
         // A free button: nothing else changes.
-        b.bind_pad(at("rstick_up"), GamepadButton::RightThumb);
+        b.bind_pad(at("rstick_up"), GamepadButton::LeftThumb);
         assert_eq!(b.pad[at("circle")], [GamepadButton::East]);
         let stored = b.pad_to_settings();
         assert_eq!(stored.len(), 3);
