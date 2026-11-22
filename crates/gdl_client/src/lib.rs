@@ -13,6 +13,7 @@ pub mod movie;
 pub mod net;
 pub mod settings;
 pub mod texfilter;
+pub mod texture_browser;
 pub mod texture_pack;
 pub mod writeback;
 

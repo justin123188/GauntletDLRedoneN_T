@@ -36,6 +36,10 @@ pub struct Settings {
     /// texture hash; absolute, or relative to the working directory).
     /// Read at startup.
     pub texture_pack: Option<PathBuf>,
+    /// NATIVE (this fork, decisions/0009): without a `texture_pack` path,
+    /// the texture_pack folder beside the game is the pack (made at
+    /// startup with a README). Off in the baseline. Read at startup.
+    pub texture_pack_folder: bool,
     /// Frame-time overlay (diagnostics).
     pub show_fps: bool,
     /// The button prompts' style (gdl_client::glyphs): "auto" follows the
@@ -110,6 +114,7 @@ impl Default for Settings {
             fullscreen: false,
             reduce_flashes: false,
             texture_pack: None,
+            texture_pack_folder: true,
             show_fps: false,
             button_prompts: Prompts::Auto,
             keys: Default::default(),
@@ -178,7 +183,7 @@ impl Settings {
     /// These settings with the original presentation (see `baseline`);
     /// window, sync, controls and the button prompts are kept.
     pub fn with_baseline_presentation(&self) -> Self {
-        Self { interpolate: false, widescreen: false, msaa: 1, smaa: false, reduce_flashes: false, texture_pack: None, ..self.with_graphics(Graphics::Original) }
+        Self { interpolate: false, widescreen: false, msaa: 1, smaa: false, reduce_flashes: false, texture_pack: None, texture_pack_folder: false, ..self.with_graphics(Graphics::Original) }
     }
 
     /// The MSAA sample count the window cameras use: 1 with SMAA or with
@@ -292,6 +297,8 @@ mod tests {
     fn baseline_is_the_original_presentation() {
         let b = Settings::baseline();
         assert!(!b.interpolate && !b.widescreen && b.msaa == 1 && b.texture_pack.is_none() && b.button_prompts == Prompts::PlayStation);
+        // NATIVE (this fork): the texture_pack folder is a remaster default only.
+        assert!(!b.texture_pack_folder && Settings::default().texture_pack_folder);
     }
 
     #[test]

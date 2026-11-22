@@ -760,6 +760,20 @@ coverage at alpha 0 exactly) are not. Checked with a pack greying all 2062 textu
 frozen frame: textured surfaces grey, vertex-coloured panels and lightmap
 tints kept).
 
+This fork (decisions/0009-texture-workflow.md, 2026-11-22): the
+`texture_pack` folder beside the game is the pack when no path is set
+(Settings::texture_pack_folder, off in the baseline); the overlay's Save
+textures row dumps into `texture_dump` beside the game while the game runs;
+a dump also writes `sources.tsv` (`<name>\t<kind>\t<source>`: level,
+character, package or hud, and the package) and `index.html`
+(gdl_client::texture_browser), a page of the textures by source and label.
+index.tsv keeps its four columns. A G1 dump with the default character:
+2063 textures; distinct per kind, the level 134, the character's model and
+effect packages 105, shared packages 1826 (WEAPONS 827, POWERUPS 406,
+ITEMS_G 190, STATIC 131, the monsters), HUD sets 16. TEXDEF labels read
+as names: YEL_SOR_FACE, WIZ_HEAD_Y00, BARN_WALL, FIRE_POTION08 (a frame:
+the trailing number).
+
 ## Accessibility
 
 `reduce_flashes` shows a brightening SetAmbientSpecial (lightning, the

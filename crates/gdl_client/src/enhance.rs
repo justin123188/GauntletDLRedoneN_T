@@ -28,6 +28,9 @@ pub enum Effect {
     /// Settings or bindings changed (store them).
     Changed,
     Closed,
+    /// NATIVE (this fork): the Save textures row; gdl_play starts or stops
+    /// saving (not a setting: off at every start).
+    SaveTextures,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,10 +89,12 @@ enum GRow {
     AmbientOcclusion,
     Bloom,
     HdTextures,
+    TexturePack,
+    SaveTextures,
     Back,
 }
 
-const GRAPHICS: [GRow; 12] = [
+const GRAPHICS: [GRow; 14] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -101,6 +106,8 @@ const GRAPHICS: [GRow; 12] = [
     GRow::AmbientOcclusion,
     GRow::Bloom,
     GRow::HdTextures,
+    GRow::TexturePack,
+    GRow::SaveTextures,
     GRow::Back,
 ];
 const SHARPEN: [u32; 6] = [0, 20, 40, 60, 80, 100];
@@ -116,10 +123,24 @@ pub enum HdStatus {
     Failed(String),
 }
 
+/// NATIVE (this fork): the texture folders as gdl_play reports them (the
+/// Texture pack folder and Save textures rows).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextureStatus {
+    /// The replacement folder in use since startup (None: none).
+    pub pack: Option<String>,
+    /// Where textures are being saved (None: not saving).
+    pub dump: Option<String>,
+    /// Textures saved since startup.
+    pub saved: usize,
+}
+
 #[derive(Default, bevy::prelude::Resource)]
 pub struct Overlay {
     /// The HD pack's state (the HD textures row).
     pub hd: HdStatus,
+    /// The texture folders' state (NATIVE, this fork).
+    pub textures: TextureStatus,
     pub open: bool,
     /// Closed with keys still down: the game ignores the keyboard until
     /// every key is released (Enter would otherwise press Start).
@@ -139,12 +160,17 @@ fn on(v: bool) -> &'static str {
 impl Overlay {
     pub fn toggle(&mut self) -> Effect {
         if self.open {
-            *self = Self { held: true, hd: self.hd.clone(), ..Self::default() };
+            *self = Self { held: true, ..self.fresh() };
             Effect::Closed
         } else {
-            *self = Self { open: true, hd: self.hd.clone(), ..Self::default() };
+            *self = Self { open: true, ..self.fresh() };
             Effect::None
         }
+    }
+
+    /// A closed overlay on the main page that keeps what gdl_play reports.
+    fn fresh(&self) -> Self {
+        Self { hd: self.hd.clone(), textures: self.textures.clone(), ..Self::default() }
     }
 
     /// Whether the next key goes to a binding.
@@ -211,11 +237,29 @@ impl Overlay {
                             (true, HdStatus::Failed(e)) => format!("On (failed: {})", e.chars().take(40).collect::<String>()),
                         }
                     ),
+                    // NATIVE (this fork): the folder is read at startup.
+                    GRow::TexturePack => {
+                        let want = s.texture_pack.is_some() || s.texture_pack_folder;
+                        let state = if s.texture_pack.is_some() { "Off (a path is set)" } else { on(s.texture_pack_folder) };
+                        let later = if want != self.textures.pack.is_some() { " (next start)" } else { "" };
+                        format!("Texture pack folder  {state}{later}")
+                    }
+                    GRow::SaveTextures => {
+                        format!("Save textures        {}", if self.textures.dump.is_some() { format!("On ({} saved)", self.textures.saved) } else { "Off".to_string() })
+                    }
                     GRow::Back => "Back".to_string(),
                 };
                 out.push(format!("{}{text}", mark(k)));
             }
             out.push(String::new());
+            if GRAPHICS.get(self.cursor) == Some(&GRow::TexturePack) {
+                out.push("Texture pack: PNG files in texture_pack beside the game replace".to_string());
+                out.push("its textures (names as in texture_dump). Read at startup.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::SaveTextures) {
+                out.push("Save textures: textures loaded from now on go to texture_dump".to_string());
+                out.push("beside the game. Loading is slower meanwhile; off at next start.".to_string());
+            }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
                 out.push("they show from the next level. Effects and skies stay original.".to_string());
@@ -285,7 +329,9 @@ impl Overlay {
             out.push("Free camera: right stick turns (left/right) and zooms (up/down);".to_string());
             out.push("keyboard: numpad 4/6 turn, 8/2 zoom. Not used in network play.".to_string());
         }
-        out.push(format!("Texture pack: {}", s.texture_pack.as_ref().map_or("none".to_string(), |p| p.display().to_string())));
+        // NATIVE (this fork): the pack in use (gdl_play reports it), else the setting's path.
+        let pack = self.textures.pack.clone().or_else(|| s.texture_pack.as_ref().map(|p| p.display().to_string()));
+        out.push(format!("Texture pack: {}", pack.as_deref().unwrap_or("none")));
         out.push("Arrows / d-pad: choose   Enter / pad A / Left / Right: change".to_string());
         out.push("Escape / pad B / F10: close".to_string());
         out
@@ -328,11 +374,11 @@ impl Overlay {
                 Effect::None
             }
             Input::Back if self.controls => {
-                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Controls).unwrap_or(0), ..Self::default() };
+                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Controls).unwrap_or(0), ..self.fresh() };
                 Effect::None
             }
             Input::Back if self.graphics => {
-                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Graphics).unwrap_or(0), ..Self::default() };
+                *self = Self { open: true, cursor: MAIN.iter().position(|r| *r == Row::Graphics).unwrap_or(0), ..self.fresh() };
                 Effect::None
             }
             Input::Back => self.toggle(),
@@ -358,6 +404,8 @@ impl Overlay {
                     GRow::AmbientOcclusion => s.ambient_occlusion = !s.ambient_occlusion,
                     GRow::Bloom => s.bloom = !s.bloom,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
+                    GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
+                    GRow::SaveTextures => return Effect::SaveTextures,
                     GRow::Back => {
                         if i != Input::Accept {
                             return Effect::None;
@@ -434,14 +482,14 @@ impl Overlay {
                         if i != Input::Accept {
                             return Effect::None;
                         }
-                        *self = Self { open: true, graphics: true, ..Self::default() };
+                        *self = Self { open: true, graphics: true, ..self.fresh() };
                         return Effect::None;
                     }
                     Row::Controls => {
                         if i != Input::Accept {
                             return Effect::None;
                         }
-                        *self = Self { open: true, controls: true, ..Self::default() };
+                        *self = Self { open: true, controls: true, ..self.fresh() };
                         return Effect::None;
                     }
                     Row::Original => {
@@ -553,6 +601,37 @@ mod tests {
         // Back returns to the main page at "Graphics...".
         o.input(Input::Back, &mut s, &mut b);
         assert!(o.open && o.lines(&s, &b).iter().any(|l| l == "> Graphics..."));
+    }
+
+    /// NATIVE (this fork): the texture folder rows. The folder is a stored
+    /// setting read at startup; Save textures asks gdl_play and shows what
+    /// it reports, also after a page change.
+    #[test]
+    fn texture_folder_rows() {
+        let (mut o, mut s, mut b) = open();
+        o.textures = TextureStatus { pack: Some("C:\\game\\texture_pack".into()), dump: None, saved: 0 };
+        assert!(o.lines(&s, &b).iter().any(|l| l == "Texture pack: C:\\game\\texture_pack"));
+        o.cursor = MAIN.iter().position(|r| *r == Row::Graphics).unwrap();
+        o.input(Input::Accept, &mut s, &mut b);
+        let row = |o: &Overlay, s: &Settings, name: &str| o.lines(s, &Bindings::default()).into_iter().find(|l| l.contains(name)).unwrap();
+        o.cursor = GRAPHICS.iter().position(|r| *r == GRow::TexturePack).unwrap();
+        assert!(row(&o, &s, "Texture pack folder").ends_with("folder  On"));
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::Changed);
+        assert!(!s.texture_pack_folder);
+        assert!(row(&o, &s, "Texture pack folder").ends_with("Off (next start)"));
+        assert!(o.lines(&s, &b).iter().any(|l| l.starts_with("Texture pack: PNG files")));
+        o.cursor = GRAPHICS.iter().position(|r| *r == GRow::SaveTextures).unwrap();
+        assert!(row(&o, &s, "Save textures  ").ends_with("Off"));
+        let before = s.clone();
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::SaveTextures);
+        assert_eq!(s, before);
+        o.textures.dump = Some("C:\\game\\texture_dump".into());
+        o.textures.saved = 12;
+        assert!(row(&o, &s, "Save textures  ").ends_with("On (12 saved)"));
+        o.input(Input::Back, &mut s, &mut b);
+        assert_eq!(o.textures.saved, 12);
+        // The main page's Original presentation turns the folder off too.
+        assert!(!Settings::default().with_baseline_presentation().texture_pack_folder);
     }
 
     #[test]

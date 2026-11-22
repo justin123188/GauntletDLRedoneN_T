@@ -16,6 +16,8 @@
 # The scripted port has no analog sticks (PadStatus analog and has_stick are
 # false): only the d-pad (entries 0-3) and the buttons count, so the free
 # camera's right stick cannot be scripted yet.
+# Use a level that starts in play (G1): in L1, the Tower, no update was
+# stepped within 300 s (2026-11-22, not investigated; the game waits).
 param(
     [Parameter(Mandatory)] [string] $Exe,
     [Parameter(Mandatory)] [string] $Config,
@@ -25,7 +27,10 @@ param(
     [int] $Updates = 600,
     [string] $Script = (Join-Path $PSScriptRoot 'g1-walk-dpad.json'),
     [int] $TimeoutSec = 240,
-    [switch] $Keep
+    [switch] $Keep,
+    # A normal window instead of a minimized one (GDL_SHOT_FRAMES screenshots
+    # need a drawn window).
+    [switch] $Visible
 )
 $ErrorActionPreference = 'Stop'
 $Exe = (Resolve-Path $Exe).Path
@@ -46,10 +51,10 @@ try {
     # The child inherits this process's environment; restored in finally.
     foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process') }
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $p = Start-Process -FilePath $Exe -ArgumentList "`"$Config`"" -PassThru -WindowStyle Minimized `
+    $p = Start-Process -FilePath $Exe -ArgumentList "`"$Config`"" -PassThru -WindowStyle $(if ($Visible) { "Normal" } else { "Minimized" }) `
         -RedirectStandardOutput (Join-Path $scratch 'stdout.txt') -RedirectStandardError (Join-Path $scratch 'stderr.txt')
     $null = $p.Handle
-    if (-not $p.WaitForExit($TimeoutSec * 1000)) { $p.Kill(); throw "timed out after $TimeoutSec s (see $scratch\stderr.txt)" }
+    if (-not $p.WaitForExit($TimeoutSec * 1000)) { $p.Kill(); $Keep = $true; throw "timed out after $TimeoutSec s (see $scratch\stderr.txt)" }
     $n = if (Test-Path $Out) { @(Get-Content $Out).Count } else { 0 }
     if ($p.ExitCode -ne 0 -or $n -ne $Updates) { $Keep = $true; throw "exit $($p.ExitCode), $n of $Updates hashes (see $scratch\stderr.txt)" }
     "{0}: {1} updates in {2}{3}, {4:N1} s; last {5}" -f $Out, $n, $Level, $(if ($Baseline) { ' (baseline)' } else { '' }), $sw.Elapsed.TotalSeconds, (Get-Content $Out -Tail 1)

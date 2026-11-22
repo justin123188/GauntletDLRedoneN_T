@@ -363,6 +363,43 @@ struct NetPageText;
 #[derive(Component)]
 struct NetPageBackdrop;
 
+/// NATIVE (this fork): a package's kind in a texture dump's sources.tsv;
+/// the players' model and effect packages (PLAYERS/...) are characters'.
+fn dump_kind(package: &str) -> &'static str {
+    if package.starts_with("PLAYERS/") { "character" } else { "package" }
+}
+
+/// NATIVE (this fork, decisions/0009): texture_dump's index.html
+/// (gdl_client::texture_browser) when saving starts, again after new
+/// index or sources lines (every 2 s at most), and when saving stops.
+fn texture_browser_page(mut last: Local<Option<(std::path::PathBuf, usize)>>, mut at: Local<Option<std::time::Instant>>) {
+    use gdl_client::texture_pack as tp;
+    let n = tp::written();
+    let write = |dir: &std::path::Path| {
+        if let Err(e) = gdl_client::texture_browser::write(dir, tp::pack_dir().as_deref()) {
+            eprintln!("texture_dump index.html: {e}");
+        }
+    };
+    match (last.clone(), tp::dump_dir()) {
+        (None, None) => {}
+        (Some((old, k)), None) => {
+            if k != n {
+                write(&old);
+            }
+            *last = None;
+        }
+        (prev, Some(dir)) => {
+            let started = prev.as_ref().is_none_or(|(d, _)| *d != dir);
+            let due = at.is_none_or(|t| 2.0 <= t.elapsed().as_secs_f32());
+            if started || (prev.is_some_and(|(_, k)| k != n) && due) {
+                write(&dir);
+                *last = Some((dir, n));
+                *at = Some(std::time::Instant::now());
+            }
+        }
+    }
+}
+
 /// NATIVE ENHANCEMENT keys: F10 the settings overlay (its keys while
 /// open; also opened by the options lists' "Display" entry), F11
 /// fullscreen, F3 the frame-rate counter. While open the overlay also
@@ -453,9 +490,22 @@ fn enhancement_input(
         }
         let (s, b) = (settings.bypass_change_detection(), bindings.bypass_change_detection());
         for i in inputs {
-            if overlay.input(i, s, b) == Effect::Changed {
-                changed = true;
+            match overlay.input(i, s, b) {
+                Effect::Changed => changed = true,
+                // NATIVE (this fork): the Save textures row (texture_dump
+                // beside the game; textures decoded from now on).
+                Effect::SaveTextures => {
+                    let dir = (!gdl_client::texture_pack::dumping()).then(gdl_client::texture_pack::default_dump_dir).flatten();
+                    gdl_client::texture_pack::set_dump(dir);
+                }
+                _ => {}
             }
+        }
+        // NATIVE (this fork): the texture rows show texture_pack's state.
+        let show = |p: Option<std::path::PathBuf>| p.map(|p| p.display().to_string());
+        let now = gdl_client::enhance::TextureStatus { pack: show(gdl_client::texture_pack::pack_dir()), dump: show(gdl_client::texture_pack::dump_dir()), saved: gdl_client::texture_pack::saved() };
+        if overlay.textures != now {
+            overlay.textures = now;
         }
         if changed {
             settings.set_changed();
@@ -4815,6 +4865,8 @@ fn spawn_bodies(commands: &mut Commands, root: Entity, sources: &Sources, sessio
 fn spawn_body(commands: &mut Commands, root: Entity, slot: usize, pc: &PlayerChar, session: &Session, meshes: &mut Assets<Mesh>, images: &mut Assets<Image>, materials: &mut Assets<gdl_client::GsMaterial>) {
     let character = &pc.character;
     let texmods = gdl_formats::animation::texmods(&character.anim_bytes).unwrap_or_default();
+    // NATIVE (this fork): a texture dump's sources.tsv.
+    gdl_client::texture_pack::set_source("character", &pc.model_name);
     let set = gdl_client::materials_for(&character.objects, &character.table, &character.textures, &texmods, images, materials);
     // DoPlayerTexMods 0x12f0a8 (do_items): the model package's texture modifiers
     // (PlayerModelData +0x24 — the magic classes' <colour>_HANDGLOW, 5
@@ -5130,6 +5182,7 @@ fn setup(
     spawn_bodies(&mut commands, root, &sources, &session, &mut meshes, &mut images, &mut materials);
     for (name, pkg) in &sources.packages {
         if !libraries.0.contains_key(name) {
+            gdl_client::texture_pack::set_source(dump_kind(name), name);
             libraries.0.insert(name.clone(), build_library(pkg, &mut meshes, &mut images, &mut materials));
         }
         if sources.monster_packages.contains(name) && !frames.0.contains_key(name) {
@@ -5151,6 +5204,10 @@ fn spawn_level(
 ) -> Library {
     let level = &session.level;
     let texmods = gdl_formats::animation::texmods(&level.anim_bytes).unwrap_or_default();
+    // NATIVE (this fork): a texture dump's sources.tsv.
+    if let Some(l) = session.levels.get(session.current) {
+        gdl_client::texture_pack::set_source("level", &format!("{} {}", l.name, l.title));
+    }
     let set = gdl_client::materials_for(&level.objects, &level.table, &level.textures, &texmods, images, materials);
     let (parts, _) = gdl_client::object_meshes(&level.objects, &set, materials, meshes);
     let names: HashMap<_, _> = level.objects.definitions.iter().map(|d| (d.label.as_str(), d.object_index as u32)).collect();
@@ -9089,6 +9146,7 @@ fn setup_menu_icon(
 ) {
     let pkg = &front.powerups_pkg;
     let Some((tree_index, tree)) = pkg.anim.as_ref().and_then(|a| a.trees.iter().enumerate().find(|(_, t)| t.label == "ICON_ARROW")) else { return };
+    gdl_client::texture_pack::set_source("package", "POWERUPS");
     let lib = build_library(pkg, &mut meshes, &mut images, &mut materials);
     // ScreenSaverCreateWeap's trees (AtreeMatch(powerup_anim, ssave_desc[k])).
     let mut saver = SaverTrees::default();
@@ -9515,6 +9573,15 @@ fn present_hud(
             } else {
                 sources.as_ref().and_then(|s| s.packages.get(&key_name))
             };
+            // NATIVE (this fork): a texture dump's sources.tsv names the set.
+            let set_name = if 100 <= t.set {
+                ["STATIC", "TITLE", "SELECT", "SONY", "GROUP1", "CREDITS"].get(t.set as usize - 100).map_or_else(|| format!("front {}", t.set), |n| n.to_string())
+            } else if let Some(n) = key_name.strip_prefix('#') {
+                sources.as_ref().and_then(|s| s.players.get(n.parse::<usize>().unwrap_or(0))?.as_ref()).map_or_else(|| key_name.clone(), |p| p.model_name.clone())
+            } else {
+                key_name.clone()
+            };
+            gdl_client::texture_pack::set_source("hud", &set_name);
             let decoded = pkg.and_then(|pkg| Some((pkg, gdl_client::hud_image(&pkg.objects, &pkg.table, &pkg.textures, t.index as usize, !mask)?)));
             // NATIVE ENHANCEMENT (button prompts): BUTTON_X/O/SQ/TRI's
             // Xbox letters beside the original.
@@ -9649,6 +9716,7 @@ fn install_char(front: &Front, sources: &mut Sources, libraries: &mut Libraries,
     let (pc, model, sfx) = load_char(front, key)?;
     for (name, pkg) in [(pc.model_name.clone(), model), (pc.sfx_name.clone(), sfx)] {
         if !libraries.0.contains_key(&name) {
+            gdl_client::texture_pack::set_source("character", &name);
             libraries.0.insert(name.clone(), build_library(&pkg, meshes, images, materials));
         }
         sources.packages.entry(name).or_insert(pkg);
@@ -11583,7 +11651,14 @@ fn run() -> Result<(), Box<dyn Error>> {
     // original presentation).
     let settings = gdl_client::settings::Settings::load(&saves);
     let settings_dir = (std::env::var_os("GDL_BASELINE").is_none() && std::env::var_os("GDL_SETTINGS").is_none()).then(|| saves.clone());
-    gdl_client::texture_pack::configure(settings.texture_pack.clone());
+    // NATIVE (this fork, decisions/0009): without a texture_pack path, the
+    // texture_pack folder beside the game (made here; off in the baseline).
+    let pack = settings.texture_pack.clone().or_else(|| {
+        let dir = gdl_client::texture_pack::default_pack_dir().filter(|_| settings.texture_pack_folder)?;
+        gdl_client::texture_pack::ensure_pack_dir(&dir);
+        Some(dir)
+    });
+    gdl_client::texture_pack::configure(pack);
     // A complete HD texture pack is in use from the start, front end
     // included (hd_textures_job generates a missing one).
     if settings.hd_textures
@@ -11869,6 +11944,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .insert_resource(TestHarness::from_env())
         .add_systems(Last, (frame_limiter, ui_trace, frame_log, diagnostic_shots, diagnostic_scene_dump))
         .add_systems(Update, hd_textures_job)
+        .add_systems(Update, texture_browser_page)
         .add_systems(First, net_frame_start)
         .add_systems(PreUpdate, (net_poll, net_local_tick).chain())
         .add_systems(PostUpdate, (interpolate_transforms.before(bevy::transform::TransformSystems::Propagate), mark_shadow_casters, present_shadow_light))
@@ -12124,6 +12200,7 @@ fn advance_level(
         for name in level_packages(&session.levels[idx]) {
             let pkg = &sources.packages[&name];
             if !libraries.0.contains_key(&name) {
+                gdl_client::texture_pack::set_source(dump_kind(&name), &name);
                 libraries.0.insert(name.clone(), build_library(pkg, &mut meshes, &mut images, &mut materials));
             }
             if sources.monster_packages.contains(&name) && !frames.0.contains_key(&name) {

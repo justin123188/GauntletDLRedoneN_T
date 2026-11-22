@@ -224,16 +224,18 @@ later. And effects look better mostly through their textures.
 - **Real dump sizes:** a G1 session dumps about 2,062 textures (11 MB); the HD
   generator saw 13,742 textures in total, mostly 16–64 px.
 
-### Planned tasks (none started in code yet)
-1. **Default pack folder and one-step dump.**
-   - Use a `texture_pack\` folder in the install folder (or beside the saves)
-     automatically, with no hand-editing of `settings.json`.
-   - Add a way to dump without environment variables: a `.bat`, or an F10
-     row "Save textures from now on".
-   - Write an `index.html` thumbnail browser, grouped by TEXDEF label and
-     category (character / world / item / effect / HUD), so the owner can find
-     e.g. the Wizard's robe.
-   - Find out first what the TEXDEF labels look like in a real dump.
+### Planned tasks (task 1 done 2026-11-22; the rest not started)
+1. **Default pack folder and one-step dump.** Done 2026-11-22 (the owner's
+   choices: the folder beside the game, an F10 row;
+   `docs/decisions/0009-texture-workflow.md`):
+   - `texture_pack\` beside gdl_play.exe is the pack (made at startup with a
+     README; Settings::texture_pack_folder, off in the baseline).
+   - F10 → Graphics → "Save textures" saves into `texture_dump\` beside the
+     game while it runs; off at every start.
+   - `texture_dump\index.html`: the textures by source (characters, levels,
+     shared packages, HUD) and label, frames together, replacements marked.
+   - TEXDEF labels are readable names (YEL_SOR_FACE, BARN_WALL,
+     FIRE_POTION08); sources come from `sources.tsv`.
 2. **F5 live reload.** Re-read the pack and swap changed textures in the
    running game, using the texfilter registry and re-prepare approach. The
    registry needs each texture's *original* name (hash) and flags to look the
