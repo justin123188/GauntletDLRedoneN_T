@@ -8,9 +8,15 @@
 //!   - fully transparent texels (a cut-out's rejected ones, a blended
 //!     texture's alpha 0) first take the mean colour of kept 8-neighbours,
 //!     repeated outward, so no dark fringes grow into the upscaled edges;
-//!   - opaque textures stay opaque, a cut-out's alpha is thresholded at
-//!     half (the material's alpha class does not change), blended alpha
-//!     goes through the network as grey (BT.601 luma of the result).
+//!   - opaque textures stay opaque, a cut-out's alpha goes through the
+//!     network as grey (BT.601 luma of the result) and is thresholded at
+//!     half (the material's alpha class does not change);
+//!   - NATIVE (this fork, PROCESSING 2, 2026-11-22): a blended alpha is the
+//!     original's, upscaled bilinearly (wrapped or clamped like the
+//!     padding) — the GPU's own magnification of the original. Through the
+//!     network (PROCESSING 1, as upscale_compare.py) a soft glow's halo
+//!     came out as hard bands with clear gaps (GLOWBOLT, GEM_HIGHLIGHT: the
+//!     owner's playtest, research/enhancements.md "HD textures").
 //!
 //! Texels here are "dump" RGBA8: GS alpha doubled to 0..255 (texture_pack's
 //! files), so 255 is opaque and ≤ 2 rejected by the alpha test.
@@ -26,8 +32,11 @@ pub struct Prepared {
     pub binary: bool,
     /// Padded RGB, channel-major (3 × (h + 2 PAD) × (w + 2 PAD)), 0..1.
     pub rgb: Vec<f32>,
-    /// Padded alpha as grey (3 planes) when not opaque.
+    /// Padded alpha as grey (3 planes) for the network: cut-outs only.
     pub alpha: Option<Vec<f32>>,
+    /// A blended texture's alpha (w × h, 0..1) for `finish`'s bilinear
+    /// upscale, with the record's repeat per axis (U, V).
+    pub soft: Option<(Vec<f32>, bool, bool)>,
 }
 
 /// GS RGBA (alpha 0x80 = opaque) → dump RGBA8 (alpha doubled, at most 255).
@@ -96,7 +105,8 @@ pub fn prepare(rgba8: &[u8], width: usize, height: usize, flags: u16) -> Prepare
     }
     let (pw, ph) = (width + 2 * PAD, height + 2 * PAD);
     let mut prgb = vec![0f32; 3 * pw * ph];
-    let mut palpha = (!opaque).then(|| vec![0f32; 3 * pw * ph]);
+    let mut palpha = (!opaque && binary).then(|| vec![0f32; 3 * pw * ph]);
+    let soft = (!opaque && !binary).then(|| (a.iter().map(|&v| v as f32 / 255.0).collect(), wrap_u, wrap_v));
     for y in 0..ph {
         let sy = src_index(y as isize - PAD as isize, height, wrap_v);
         for x in 0..pw {
@@ -113,11 +123,27 @@ pub fn prepare(rgba8: &[u8], width: usize, height: usize, flags: u16) -> Prepare
             }
         }
     }
-    Prepared { width, height, opaque, binary, rgb: prgb, alpha: palpha }
+    Prepared { width, height, opaque, binary, rgb: prgb, alpha: palpha, soft }
+}
+
+/// A w × h plane sampled bilinearly at output texel (ox, oy) of its SCALE×
+/// upscale (texel centres; wrapped or clamped per axis), as the GPU
+/// magnifies a texture.
+fn bilinear(plane: &[f32], w: usize, h: usize, wrap_u: bool, wrap_v: bool, ox: usize, oy: usize) -> f32 {
+    let axis = |o: usize, size: usize, wrap: bool| {
+        let t = (o as f32 + 0.5) / SCALE as f32 - 0.5;
+        let i = t.floor();
+        (src_index(i as isize, size, wrap), src_index(i as isize + 1, size, wrap), t - i)
+    };
+    let (x0, x1, fx) = axis(ox, w, wrap_u);
+    let (y0, y1, fy) = axis(oy, h, wrap_v);
+    let row = |y: usize| plane[y * w + x0] + (plane[y * w + x1] - plane[y * w + x0]) * fx;
+    row(y0) + (row(y1) - row(y0)) * fy
 }
 
 /// The 4× dump RGBA8 from the network's cropped outputs (each 3 × 4h × 4w,
-/// clamped to 0..1): `rgb` and, when not opaque, the alpha pass's grey.
+/// clamped to 0..1): `rgb` and, for a cut-out, the alpha pass's grey (a
+/// blended alpha is `soft`'s bilinear upscale).
 pub fn finish(p: &Prepared, rgb: &[f32], alpha: Option<&[f32]>) -> Vec<u8> {
     let (ow, oh) = (p.width * SCALE, p.height * SCALE);
     let plane = ow * oh;
@@ -126,10 +152,12 @@ pub fn finish(p: &Prepared, rgb: &[f32], alpha: Option<&[f32]>) -> Vec<u8> {
     for i in 0..plane {
         let a = if p.opaque {
             1.0
+        } else if let Some((soft, wrap_u, wrap_v)) = &p.soft {
+            bilinear(soft, p.width, p.height, *wrap_u, *wrap_v, i % ow, i / ow)
         } else {
             let g = alpha.expect("alpha pass");
             let v = 0.299f32 * g[i] + 0.587f32 * g[plane + i] + 0.114f32 * g[2 * plane + i];
-            if p.binary { if 0.5 <= v { 1.0 } else { 0.0 } } else { v }
+            if 0.5 <= v { 1.0 } else { 0.0 }
         };
         out.extend([q(rgb[i]), q(rgb[plane + i]), q(rgb[2 * plane + i]), q(a)]);
     }
@@ -170,13 +198,37 @@ mod tests {
 
     #[test]
     fn finish_keeps_alpha_classes() {
-        let p = Prepared { width: 1, height: 1, opaque: false, binary: true, rgb: Vec::new(), alpha: None };
+        let p = Prepared { width: 1, height: 1, opaque: false, binary: true, rgb: Vec::new(), alpha: None, soft: None };
         let rgb = vec![0.5f32; 3 * 16];
         let low = vec![0.4f32; 3 * 16];
         let out = finish(&p, &rgb, Some(&low));
         assert!(out.chunks_exact(4).all(|t| t == [128, 128, 128, 0]));
-        let p = Prepared { binary: false, ..p };
-        let out = finish(&p, &rgb, Some(&low));
+        // Blended: the original's alpha, not the network's.
+        let p = Prepared { binary: false, soft: Some((vec![0.4], true, true)), ..p };
+        let out = finish(&p, &rgb, None);
         assert!(out.chunks_exact(4).all(|t| t[3] == 102));
+    }
+
+    /// NATIVE (this fork): only a cut-out's alpha goes to the network; a
+    /// blended alpha is kept for the bilinear upscale.
+    #[test]
+    fn blended_alpha_skips_the_network() {
+        let cut = prepare(&[9, 9, 9, 255, 0, 0, 0, 0], 2, 1, 0);
+        assert!(cut.alpha.is_some() && cut.soft.is_none());
+        let soft = prepare(&[9, 9, 9, 255, 9, 9, 9, 100], 2, 1, 0x4);
+        assert!(soft.alpha.is_none());
+        assert_eq!(soft.soft.as_ref().map(|s| (s.0.len(), s.1, s.2)), Some((2, false, true)));
+    }
+
+    /// The upscale of a 2×1 alpha ramp: monotonic from texel centre to
+    /// texel centre, flat beyond them when clamped, wrapping when repeated.
+    #[test]
+    fn soft_alpha_is_bilinear() {
+        let ramp = [0.0f32, 1.0];
+        let row = |wrap: bool| (0..8).map(|x| bilinear(&ramp, 2, 1, wrap, true, x, 0)).collect::<Vec<_>>();
+        assert_eq!(row(false), [0.0, 0.0, 0.125, 0.375, 0.625, 0.875, 1.0, 1.0]);
+        let wrapped = row(true);
+        assert_eq!((wrapped[0], wrapped[7]), (0.375, 0.625));
+        assert_eq!(wrapped[2..6], [0.125, 0.375, 0.625, 0.875]);
     }
 }

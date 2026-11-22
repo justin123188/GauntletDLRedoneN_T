@@ -599,7 +599,13 @@ retail-derived ships.
   Their blended alpha goes through the network as grey, which sharpens a
   soft halo into hard bands with clear gaps (GLOWBOLT: the arrow, a clear
   ring, a solid outer ring). Compared from the files (the G1 dump against
-  the owner's pack); not yet A/B-rendered in the game.
+  the owner's pack); not yet A/B-rendered in the game. Since PROCESSING 2
+  (decisions/0010-hd-soft-alpha.md) a blended alpha is the original's,
+  upscaled bilinearly; the colour still goes through the network. A full
+  p2 pack: 13742 textures, 6854 kept, 258.9 s on the RTX 3060; its glow
+  alphas follow the originals' soft halos. The census (20596 textures)
+  found no texel with GS alpha above 0x80 as the client decodes them, so
+  the pack's PNG alpha (up to 0x80) loses no glow brightness.
 
 ## Settings overlay and keys
 

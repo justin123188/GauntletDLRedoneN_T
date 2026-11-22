@@ -17,8 +17,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// The processing's version (hd::prep and the network's use): a change to
-/// what is written takes a new pack directory.
-pub const PROCESSING: u32 = 1;
+/// what is written takes a new pack directory. NATIVE (this fork,
+/// 2026-11-22): 2, a blended alpha upscaled bilinearly from the original
+/// (hd::prep); 1 was upstream's.
+pub const PROCESSING: u32 = 2;
 
 pub fn model_sha256() -> String {
     Sha256::digest(esrgan::GENERAL_DN05).iter().map(|b| format!("{b:02x}")).collect()
