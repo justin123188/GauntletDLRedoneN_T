@@ -56,9 +56,45 @@ Edge (headless, local) renders index.html with the groups and thumbnails;
 134 red/blue-swapped copies of G1's level textures in texture_pack changed
 exactly the level's surfaces in a frame-700 screenshot (the character,
 items, enemies and HUD unchanged) and the page counted 134 replaced. The
-600 per-update simulation hashes equal the reference in every run. Not
-checked: the overlay rows with a keyboard or pad in the running game (the
-owner's test).
+600 per-update simulation hashes equal the reference in every run. The
+owner's playtest (2026-11-22, test build of a55909e): "It works good and
+looks ok".
 
-Not done yet: reloading the pack while the game runs (F5), the fix-up tool
-for AI images and the recipe.
+## F5: reload while the game runs (2026-11-22)
+
+- **What.** F5 in play (gdl_client::texture_reload; not while the overlay
+  is open; no F key is bindable) asks texture_pack again for every base
+  texture materials_for made: the user's pack, then the generated HD pack.
+  Where the answer changed (another file, a file written since: its path,
+  modification time and length, or no file) the same image takes the new
+  texels: a replacement's one level, or the original's levels, taken from
+  the image the first time a reload replaces it (no copy is held before:
+  no memory until the feature is used). texfilter's chain and sampler
+  follow the new level count; the materials are prepared again two frames
+  later (texfilter's live switch). The result is shown for 4 s where the
+  frame rate is ("Textures reloaded: 3 replaced"); a saving texture_dump's
+  index.html is written again.
+- **Limits.** Texture-modifier targets keep copying their frames (the
+  frames are reloaded). HUD images and lightmaps are not reloaded (the next
+  start). A texture replaced when its level loaded was never in memory as
+  the original: removing its file takes effect at the next level. A
+  replacement whose alpha class (opaque, cut-out, blended) differs from the
+  original's keeps the material's until the level loads again (counted in
+  the message).
+
+Verification (2026-11-22, the owner's PC, the actual disc's import, a
+scratch copy with APPDATA redirected): unit tests (a replacement, an
+unchanged and a changed file, the original's levels back, a borrowed
+target left alone, a texture replaced at load, an alpha class change, a
+removed image, the messages). A G1 TEST run with GDL_TEST_ACTIONS
+`{"at": u, "reload_textures": true}` (the same path as F5): 134
+red/blue-swapped G1 level textures copied into texture_pack at update 153,
+a reload at update 300 ("142 replaced": some textures serve several
+records), the files deleted at update 403, a reload at 500 ("142 back to
+the original"); screenshots show the level's surfaces swapped two frames
+after the first reload and the originals after the second; the 600
+per-update simulation hashes equal the reference. The first reload's frame
+took 1.04 s (142 textures read and their chains built at once), the second
+0.14 s. Not checked: F5 from the keyboard in the owner's game.
+
+Not done yet: the fix-up tool for AI images and the recipe.

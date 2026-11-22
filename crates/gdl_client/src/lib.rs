@@ -15,6 +15,7 @@ pub mod settings;
 pub mod texfilter;
 pub mod texture_browser;
 pub mod texture_pack;
+pub mod texture_reload;
 pub mod writeback;
 
 use bevy::{
@@ -800,7 +801,7 @@ pub struct MaterialSet {
 
 /// An Rgba8Unorm image holding `levels` (level 0 first, each max(1, size >>
 /// k)) as its mip chain.
-fn mip_image(width: u16, height: u16, levels: Vec<Vec<u8>>, sampler: ImageSampler) -> Image {
+pub(crate) fn mip_image(width: u16, height: u16, levels: Vec<Vec<u8>>, sampler: ImageSampler) -> Image {
     let count = levels.len() as u32;
     let mut image = raw_image(width, height, levels[0].clone(), TextureFormat::Rgba8Unorm, sampler);
     if 1 < count {
@@ -921,7 +922,7 @@ pub fn materials_for(
         if candidates.len() == 1 {
             label_index.entry(candidates[0].label.to_uppercase()).or_insert(bitmap.index as u16);
         }
-        let Some(PreparedTexture { width, height, levels, own_levels, class }) = decoded else {
+        let Some(PreparedTexture { width, height, levels, own_levels, class, name, applied }) = decoded else {
             unresolved.push(bitmap.index);
             // A magenta placeholder image: texture modifiers (MBSetRomTexture /
             // MBCopyTexture) may later copy a decoded frame into this record.
@@ -956,6 +957,10 @@ pub fn materials_for(
         let key = texfilter::TexKey { flags: bitmap.flags, levels: own_levels, animated: false, borrowed: false };
         let image = images.add(mip_image(width, height, levels, texfilter::sampler(key, sharp)));
         texfilter::register(image.id(), key);
+        // NATIVE (this fork): F5 reloads it (texture_reload).
+        if let Some(name) = name {
+            texture_reload::register(image.id(), name, bitmap.width, bitmap.height, own_levels, class, applied.as_deref());
+        }
         labels.entry(candidates[0].label.to_uppercase()).or_insert_with(|| image.clone());
         record_images.insert(bitmap.index as u16, image.clone());
         base.insert(
@@ -1009,6 +1014,10 @@ struct PreparedTexture {
     levels: Vec<Vec<u8>>,
     own_levels: u8,
     class: u8,
+    /// NATIVE (this fork, texture_reload): the texture's name and the file
+    /// that replaced it, while a pack or dump is set.
+    name: Option<String>,
+    applied: Option<std::path::PathBuf>,
 }
 
 fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::objects::ObjectBitmap, label: &str, sharp: bool) -> Option<PreparedTexture> {
@@ -1025,10 +1034,15 @@ fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::
     // NATIVE ENHANCEMENT: a texture pack's replacement (texture_pack; one
     // level, so the GS LOD selection does not apply to it).
     let (mut width, mut height) = (bitmap.width, bitmap.height);
+    let (mut name, mut applied) = (None, None);
     if texture_pack::active()
-        && let Some((w, h, new)) = texture_pack::replace(width, height, &levels[0], label, bitmap.flags)
+        && let Some(found) = texture_pack::lookup(width, height, &levels[0], label, bitmap.flags)
     {
-        (width, height, levels) = (w as u16, h as u16, vec![new]);
+        name = Some(found.name);
+        if let Some((path, w, h, new)) = found.file {
+            (width, height, levels) = (w as u16, h as u16, vec![new]);
+            applied = Some(path);
+        }
     }
     // Opaque when every texel passes at full coverage; Mask when texels are
     // either rejected by the alpha test or full; otherwise blended.
@@ -1044,7 +1058,7 @@ fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::
     // NATIVE ENHANCEMENT (texfilter, "sharp"): the chain continued to 1×1
     // and an anisotropic sampler; the original keeps these levels.
     let levels = texfilter::with_chain(width.into(), height.into(), levels, sharp);
-    Some(PreparedTexture { width, height, levels, own_levels, class })
+    Some(PreparedTexture { width, height, levels, own_levels, class, name, applied })
 }
 
 /// prepare_texture for every record (lightmaps and records without a

@@ -254,7 +254,7 @@ impl Overlay {
             out.push(String::new());
             if GRAPHICS.get(self.cursor) == Some(&GRow::TexturePack) {
                 out.push("Texture pack: PNG files in texture_pack beside the game replace".to_string());
-                out.push("its textures (names as in texture_dump). Read at startup.".to_string());
+                out.push("its textures (names as in texture_dump). F5 in play reloads them.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::SaveTextures) {
                 out.push("Save textures: textures loaded from now on go to texture_dump".to_string());

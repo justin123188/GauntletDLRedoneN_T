@@ -363,6 +363,64 @@ struct NetPageText;
 #[derive(Component)]
 struct NetPageBackdrop;
 
+/// NATIVE (this fork): a line shown where the frame rate is for a few
+/// seconds (the F5 texture reload's result).
+#[derive(Resource, Default)]
+struct ScreenNotice(Option<(String, std::time::Instant)>);
+
+impl ScreenNotice {
+    /// The line while it is shown (4 s).
+    fn current(&self) -> Option<&str> {
+        self.0.as_ref().filter(|(_, at)| at.elapsed().as_secs_f32() < 4.0).map(|(s, _)| s.as_str())
+    }
+}
+
+/// NATIVE (this fork, decisions/0009): F5 reloads the texture pack in the
+/// running game (gdl_client::texture_reload) and says what changed; the
+/// materials are prepared again two frames later, when the changed images
+/// are on the GPU (as apply_graphics after a filter switch). A saving
+/// texture_dump's index.html marks the new replacements.
+#[allow(clippy::too_many_arguments)]
+fn reload_textures(
+    keys: Res<ButtonInput<KeyCode>>,
+    overlay: Res<gdl_client::enhance::Overlay>,
+    (mut images, mut materials): (ResMut<Assets<Image>>, ResMut<Assets<gdl_client::GsMaterial>>),
+    mut notice: ResMut<ScreenNotice>,
+    mut reprepare: Local<u8>,
+    (sim, harness, mut acted): (Option<Res<Sim>>, Res<TestHarness>, Local<Option<u64>>),
+) {
+    if 0 < *reprepare {
+        *reprepare -= 1;
+        if *reprepare == 0 {
+            for _ in materials.iter_mut() {}
+        }
+    }
+    // TEST harness: GDL_TEST_ACTIONS {"at": u, "reload_textures": true} as F5.
+    let mut scripted = false;
+    if let Some(s) = sim.as_ref()
+        && *acted != Some(s.updates)
+    {
+        *acted = Some(s.updates);
+        scripted = harness.actions.iter().any(|a| a["at"].as_u64() == Some(s.updates) && a["reload_textures"] == true);
+    }
+    if !scripted && (overlay.open || !keys.just_pressed(KeyCode::F5)) {
+        return;
+    }
+    use gdl_client::texture_pack as tp;
+    let line = if tp::pack_dir().is_none() && !tp::active() {
+        "No texture pack in use (F10, Graphics: Texture pack folder)".to_string()
+    } else {
+        let report = gdl_client::texture_reload::reload(&mut images);
+        *reprepare = 2;
+        if let Some(dump) = tp::dump_dir() {
+            let _ = gdl_client::texture_browser::write(&dump, tp::pack_dir().as_deref());
+        }
+        report.message()
+    };
+    eprintln!("F5: {line}");
+    notice.0 = Some((line, std::time::Instant::now()));
+}
+
 /// NATIVE (this fork): a package's kind in a texture dump's sources.tsv;
 /// the players' model and effect packages (PLAYERS/...) are characters'.
 fn dump_kind(package: &str) -> &'static str {
@@ -757,7 +815,7 @@ fn present_overlay(
     mut backdrop: Query<(&mut Sprite, &mut Transform, &mut Visibility), (With<OverlayBackdrop>, Without<OverlayText>, Without<FpsText>)>,
     mut text: Query<(&mut Text2d, &mut TextFont, &mut Transform, &mut Visibility), (With<OverlayText>, Without<FpsText>)>,
     mut fps: Query<(&mut Text2d, &mut TextFont, &mut Transform, &mut Visibility), (With<FpsText>, Without<OverlayText>)>,
-    net: Res<Net>,
+    (net, notice): (Res<Net>, Res<ScreenNotice>),
     (front, screen): (Res<Front>, Res<Screen>),
     mut net_page: Query<(&mut Text2d, &mut TextFont, &mut Transform, &mut Visibility), (With<NetPageText>, Without<OverlayText>, Without<FpsText>, Without<OverlayBackdrop>)>,
     mut net_backdrop: Query<(&mut Sprite, &mut Transform, &mut Visibility), (With<NetPageBackdrop>, Without<OverlayBackdrop>, Without<NetPageText>, Without<OverlayText>, Without<FpsText>)>,
@@ -774,7 +832,9 @@ fn present_overlay(
     let scale = w.scale_factor().max(0.1);
     let (fw, fh) = (fw as f32 / scale, fh as f32 / scale);
     let page = *screen == Screen::Front && front.attract_run.is_none() && is_net_page(&front.menu.page);
-    let active = overlay.open || settings.show_fps || waiting || page;
+    // NATIVE (this fork): a notice (the F5 texture reload) where the frame rate is.
+    let notice = notice.current();
+    let active = overlay.open || settings.show_fps || waiting || page || notice.is_some();
     for mut c in &mut cam {
         if c.is_active != active {
             c.is_active = active;
@@ -833,8 +893,8 @@ fn present_overlay(
         }
     }
     if let Ok((mut t, mut font, mut tf, mut v)) = fps.single_mut() {
-        show(&mut v, settings.show_fps || waiting);
-        if (settings.show_fps || waiting) && !frames.is_empty() {
+        show(&mut v, settings.show_fps || waiting || notice.is_some());
+        if (settings.show_fps || waiting || notice.is_some()) && !frames.is_empty() {
             let mean = frames.iter().sum::<f32>() / frames.len() as f32;
             let worst = frames.iter().copied().fold(0.0, f32::max);
             let mut line = if settings.show_fps {
@@ -844,6 +904,9 @@ fn present_overlay(
             };
             if waiting {
                 line = format!("Waiting for the other machines…  {line}");
+            }
+            if let Some(n) = notice {
+                line = if line.is_empty() { n.to_string() } else { format!("{n}   {line}") };
             }
             if t.0 != line {
                 t.0 = line;
@@ -3725,7 +3788,8 @@ struct TestHarness {
     /// {"at": u, "spawn": [type, level, ai(, dx, dz)]} (DEBUG) | {"at": u, "next_coin": coins} (DEBUG) |
     /// {"at": u, "save": card file} for player 1 |
     /// {"at": u, "settings": {...}}: fields merged into the M19 settings
-    /// and stored, as the settings overlay does (M20 platform checks)].
+    /// and stored, as the settings overlay does (M20 platform checks) |
+    /// {"at": u, "reload_textures": true}: F5 (this fork, texture_reload)].
     actions: Vec<serde_json::Value>,
     /// GDL_MENU_SCRIPT: like GDL_INPUT_SCRIPT, indexed by the ticks spent
     /// outside play (tally, shop, select screen, map, message boxes).
@@ -11956,6 +12020,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         .add_systems(Last, (frame_limiter, ui_trace, frame_log, diagnostic_shots, diagnostic_scene_dump))
         .add_systems(Update, hd_textures_job)
         .add_systems(Update, texture_browser_page)
+        .init_resource::<ScreenNotice>()
+        .add_systems(Update, reload_textures)
         .add_systems(First, net_frame_start)
         .add_systems(PreUpdate, (net_poll, net_local_tick).chain())
         .add_systems(PostUpdate, (interpolate_transforms.before(bevy::transform::TransformSystems::Propagate), mark_shadow_casters, present_shadow_light))

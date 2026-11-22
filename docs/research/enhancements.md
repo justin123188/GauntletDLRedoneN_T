@@ -800,6 +800,20 @@ ITEMS_G 190, STATIC 131, the monsters), HUD sets 16. TEXDEF labels read
 as names: YEL_SOR_FACE, WIZ_HEAD_Y00, BARN_WALL, FIRE_POTION08 (a frame:
 the trailing number).
 
+F5 in play (this fork, gdl_client::texture_reload, decisions/0009 "F5")
+swaps changed, new and removed replacements of the base textures
+materials_for made, in place, and prepares the materials again two frames
+later. G1 check: 142 images replaced, then back to the originals, one
+reload each (frames 1.04 s and 0.14 s); simulation hashes unchanged. HUD
+images are not reloaded.
+
+Effect sprites the HD pack keeps original show a dark rim when magnified
+(the owner's playtest, 2026-11-22: the Red Wizard's sparks, zoomed in):
+their clear texels are black, and bilinear filtering blends that black
+into the edge. The PS2 had the same rim at 448 lines. Not changed yet: a
+fill of clear texels with their kept neighbours' colour at load (hd::prep's
+fill_clear) would remove it.
+
 ## Accessibility
 
 `reduce_flashes` shows a brightening SetAmbientSpecial (lightning, the

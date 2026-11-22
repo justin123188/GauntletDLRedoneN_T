@@ -224,7 +224,7 @@ later. And effects look better mostly through their textures.
 - **Real dump sizes:** a G1 session dumps about 2,062 textures (11 MB); the HD
   generator saw 13,742 textures in total, mostly 16–64 px.
 
-### Planned tasks (task 1 done 2026-11-22; the rest not started)
+### Planned tasks (tasks 1–2 done 2026-11-22; the rest not started)
 1. **Default pack folder and one-step dump.** Done 2026-11-22 (the owner's
    choices: the folder beside the game, an F10 row;
    `docs/decisions/0009-texture-workflow.md`):
@@ -236,10 +236,20 @@ later. And effects look better mostly through their textures.
      shared packages, HUD) and label, frames together, replacements marked.
    - TEXDEF labels are readable names (YEL_SOR_FACE, BARN_WALL,
      FIRE_POTION08); sources come from `sources.tsv`.
-2. **F5 live reload.** Re-read the pack and swap changed textures in the
-   running game, using the texfilter registry and re-prepare approach. The
-   registry needs each texture's *original* name (hash) and flags to look the
-   pack up again.
+2. **F5 live reload.** Done 2026-11-22 (`gdl_client::texture_reload`,
+   decisions/0009 "F5"): F5 in play swaps changed, new and removed
+   replacements in place and says what changed where the frame rate is. Not
+   reloaded: HUD images (next start). A big reload costs a hitch (142
+   textures: 1 s); reading and chaining could move to worker threads.
+   - Also found and fixed on the way: soft glows sharpened by the HD
+     upscaler (decisions/0010, PROCESSING 2), and an error box when the
+     game quit during HD generation.
+   - To do (the owner, 2026-11-22: "not sure that really a problem"):
+     small effect sprites kept original by HD (the Red Wizard's sparks) show
+     a dark rim when zoomed in: their clear texels are black, which bilinear
+     magnification blends into the edge. The fix: give clear texels their
+     kept neighbours' colour at load (as hd::prep's fill_clear), NATIVE and
+     off in the baseline.
 3. **ChatGPT recipe plus a fix-up tool** (a `gdl_tools` subcommand, or a
    small exe for Windows):
    - Resize an AI image to an exact multiple of the original (e.g. 4×).

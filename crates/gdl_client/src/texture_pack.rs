@@ -112,7 +112,7 @@ const PACK_README: &str = "Replacement textures (a native feature of this remast
 PNG files in this folder replace the game's textures. A file must have the\r
 name of the texture it replaces, as in the texture_dump folder (for example\r
 0edda1314885f6a6.png). Any size up to 4096 x 4096 works. The game reads\r
-this folder when it starts.\r
+this folder when it starts, and again when you press F5 in play.\r
 \r
 To get the game's textures: press F10, choose Graphics..., and set Save\r
 textures to On. Every texture the game loads from then on is saved to the\r
@@ -171,6 +171,19 @@ pub fn name(width: u16, height: u16, rgba: &[u8]) -> String {
 /// texture, after writing it (with its TEXDEF `label` and record `flags`)
 /// to the dump directory when one is set.
 pub fn replace(width: u16, height: u16, rgba: &[u8], label: &str, flags: u16) -> Option<(u32, u32, Vec<u8>)> {
+    lookup(width, height, rgba, label, flags)?.file.map(|(_, w, h, px)| (w, h, px))
+}
+
+/// NATIVE (this fork, texture_reload): `replace`'s result with the
+/// texture's name and the file it came from (None while no pack or dump
+/// is set).
+pub struct Lookup {
+    pub name: String,
+    pub file: Option<(PathBuf, u32, u32, Vec<u8>)>,
+}
+
+/// `replace`, keeping the name and the file (texture_reload registers them).
+pub fn lookup(width: u16, height: u16, rgba: &[u8], label: &str, flags: u16) -> Option<Lookup> {
     let cfg = CONFIG.read().ok()?;
     if cfg.pack.is_none() && cfg.generated.is_none() && cfg.dump.is_none() {
         return None;
@@ -179,7 +192,18 @@ pub fn replace(width: u16, height: u16, rgba: &[u8], label: &str, flags: u16) ->
     if let Some(dir) = &cfg.dump {
         dump(dir, &stem, width, height, rgba, label, flags);
     }
-    [&cfg.pack, &cfg.generated].into_iter().flatten().find_map(|dir| read_png(&dir.join(format!("{stem}.png"))))
+    let file = [&cfg.pack, &cfg.generated].into_iter().flatten().find_map(|dir| {
+        let path = dir.join(format!("{stem}.png"));
+        read_png(&path).map(|(w, h, px)| (path, w, h, px))
+    });
+    Some(Lookup { name: stem, file })
+}
+
+/// NATIVE (this fork, texture_reload): the file that replaces texture
+/// `name` now (the user's pack first, then the generated pack).
+pub fn find(name: &str) -> Option<PathBuf> {
+    let cfg = CONFIG.read().ok()?;
+    [&cfg.pack, &cfg.generated].into_iter().flatten().map(|dir| dir.join(format!("{name}.png"))).find(|p| p.is_file())
 }
 
 /// One texture into the dump: its file and index.tsv line when new, and
@@ -217,7 +241,7 @@ fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), Bo
 }
 
 /// A PNG as RGBA with GS alpha (8-bit, any colour type; at most 4096²).
-fn read_png(path: &Path) -> Option<(u32, u32, Vec<u8>)> {
+pub(crate) fn read_png(path: &Path) -> Option<(u32, u32, Vec<u8>)> {
     let file = std::fs::File::open(path).ok()?;
     let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
     decoder.set_transformations(png::Transformations::normalize_to_color8());

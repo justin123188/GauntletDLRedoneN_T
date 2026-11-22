@@ -64,6 +64,26 @@ pub fn register(id: AssetId<Image>, key: TexKey) {
     }
 }
 
+/// NATIVE (this fork, texture_reload): a registered texture's key.
+pub fn key(id: AssetId<Image>) -> Option<TexKey> {
+    REGISTRY.lock().ok()?.as_ref()?.get(&id).copied()
+}
+
+/// NATIVE (this fork, texture_reload): textures changed outside `apply`
+/// (texture modifiers' targets copy their current frame in again).
+pub fn bump_generation() {
+    GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+/// NATIVE (this fork, texture_reload): an image's first `count` levels
+/// (its own, before a generated chain), when its data holds them.
+pub fn own_levels(image: &Image, count: u8) -> Option<Vec<Vec<u8>>> {
+    let (w, h) = (image.width(), image.height());
+    let data = image.data.as_ref()?;
+    let count = u32::from(count.max(1));
+    (level_bytes(w, h, count) <= data.len()).then(|| (0..count).map(|k| level_slice(data, w, h, k).to_vec()).collect())
+}
+
 /// The sampler of a base texture. Original: GS CLAMP_1 of the bitmap
 /// record — flag 0x8 selected WMT CLAMP in every G1 draw matched to a
 /// record (observed); flag 0x4 → WMS CLAMP is a HYPOTHESIS by symmetry
