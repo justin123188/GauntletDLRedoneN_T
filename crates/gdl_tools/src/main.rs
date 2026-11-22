@@ -1618,6 +1618,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 paused: g("paused")?,
                 help: g("help")?,
                 game_mode: g("game_mode")? as u32,
+                free: None,
             };
             let r = cam.update_once(&ctx);
             let mut diff = Vec::new();
@@ -1725,6 +1726,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             paused: int("paused"),
             help: int("help"),
             game_mode: int("game_mode") as u32,
+            free: None,
         };
         let before = cam.std.0.clone();
         let moved = cam.update_once(&ctx).map_err(|e| e.0)?;

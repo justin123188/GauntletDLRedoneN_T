@@ -327,3 +327,10 @@ trig_cam_mat bit-exact against the capture.
 ShakeCamera call sites (radius, type, delay, count, priority): PlayerMotion
 (0.3, 0, 0, 0x1e, 0xc8), DoPlyrSfx and CritterDoSfx (0.1, 0, 0, 0x5a, 0x64),
 ProcessItems triggers (0.1, 0, 0, 0xb4, 0x64).
+
+## Native: free camera (decisions/0008)
+
+Not part of the original game. With Settings::camera "free" UpdateCam adds
+the player's yaw offset to the view (CamUpdate, CalcFrustrumNormals) and
+scales the follow distance and limit radius by the zoom (CalcDist,
+UpdateCam). Off, CamCtx::free is None and every step above is unchanged.

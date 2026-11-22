@@ -78,6 +78,24 @@ pub struct Settings {
     /// and skies keep their originals). Turning it on generates the pack
     /// once; not part of the presets (Original turns it off).
     pub hd_textures: bool,
+    /// NATIVE gameplay option (decisions/0008; not presentation: the
+    /// player's movement follows the camera). "free": the right stick turns
+    /// and zooms the gameplay camera; "original": the original camera.
+    /// Off in network play.
+    pub camera: CameraMode,
+    /// The free camera still turns with the level's camera rails.
+    pub camera_follow_rails: bool,
+    /// The free camera turns the other way for the same stick direction.
+    pub camera_invert: bool,
+}
+
+/// Settings::camera.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CameraMode {
+    #[default]
+    Original,
+    Free,
 }
 
 impl Default for Settings {
@@ -110,6 +128,9 @@ impl Default for Settings {
             bloom: true,
             smaa: false,
             hd_textures: false,
+            camera: CameraMode::Original,
+            camera_follow_rails: true,
+            camera_invert: false,
         }
     }
 }

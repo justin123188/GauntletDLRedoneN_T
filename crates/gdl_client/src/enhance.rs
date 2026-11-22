@@ -3,7 +3,7 @@
 //! stored in settings.json. The game waits while it is open. This module
 //! is the overlay's state and text; gdl_play draws it and feeds it keys.
 use crate::controls::{ACTIONS, Bindings};
-use crate::settings::{Graphics, Prompts, Settings, TextureFilter};
+use crate::settings::{CameraMode, Graphics, Prompts, Settings, TextureFilter};
 use bevy::input::keyboard::KeyCode;
 
 /// The overlay's input, already decoded from the keyboard.
@@ -42,13 +42,34 @@ enum Row {
     ReduceFlashes,
     ShowFps,
     Prompts,
+    Camera,
+    CameraRails,
+    CameraInvert,
     Graphics,
     Controls,
     Original,
     Close,
 }
 
-const MAIN: [Row; 14] = [Row::Widescreen, Row::Blend, Row::Vsync, Row::FpsCap, Row::FrameQueue, Row::Fullscreen, Row::Msaa, Row::ReduceFlashes, Row::ShowFps, Row::Prompts, Row::Graphics, Row::Controls, Row::Original, Row::Close];
+const MAIN: [Row; 17] = [
+    Row::Widescreen,
+    Row::Blend,
+    Row::Vsync,
+    Row::FpsCap,
+    Row::FrameQueue,
+    Row::Fullscreen,
+    Row::Msaa,
+    Row::ReduceFlashes,
+    Row::ShowFps,
+    Row::Prompts,
+    Row::Camera,
+    Row::CameraRails,
+    Row::CameraInvert,
+    Row::Graphics,
+    Row::Controls,
+    Row::Original,
+    Row::Close,
+];
 const FPS_CAPS: [u32; 7] = [0, 30, 60, 75, 120, 144, 240];
 
 /// The graphics page's rows (post-1.0 enhancements).
@@ -243,6 +264,15 @@ impl Overlay {
                         Prompts::Xbox => "Xbox",
                     }
                 ),
+                Row::Camera => format!(
+                    "Camera               {}",
+                    match s.camera {
+                        CameraMode::Original => "Original",
+                        CameraMode::Free => "Free (right stick)",
+                    }
+                ),
+                Row::CameraRails => format!("  Turns with level   {}", on(s.camera_follow_rails)),
+                Row::CameraInvert => format!("  Invert turning     {}", on(s.camera_invert)),
                 Row::Graphics => "Graphics...".to_string(),
                 Row::Controls => "Player 1 keys...".to_string(),
                 Row::Original => "Original presentation".to_string(),
@@ -251,6 +281,10 @@ impl Overlay {
             out.push(format!("{}{text}", mark(k)));
         }
         out.push(String::new());
+        if matches!(MAIN.get(self.cursor), Some(Row::Camera | Row::CameraRails | Row::CameraInvert)) {
+            out.push("Free camera: right stick turns (left/right) and zooms (up/down);".to_string());
+            out.push("keyboard: numpad 4/6 turn, 8/2 zoom. Not used in network play.".to_string());
+        }
         out.push(format!("Texture pack: {}", s.texture_pack.as_ref().map_or("none".to_string(), |p| p.display().to_string())));
         out.push("Arrows / d-pad: choose   Enter / pad A / Left / Right: change".to_string());
         out.push("Escape / pad B / F10: close".to_string());
@@ -370,6 +404,14 @@ impl Overlay {
                     Row::Fullscreen => s.fullscreen = !s.fullscreen,
                     Row::ReduceFlashes => s.reduce_flashes = !s.reduce_flashes,
                     Row::ShowFps => s.show_fps = !s.show_fps,
+                    Row::Camera => {
+                        s.camera = match s.camera {
+                            CameraMode::Original => CameraMode::Free,
+                            CameraMode::Free => CameraMode::Original,
+                        }
+                    }
+                    Row::CameraRails => s.camera_follow_rails = !s.camera_follow_rails,
+                    Row::CameraInvert => s.camera_invert = !s.camera_invert,
                     Row::Prompts => {
                         let order = [Prompts::Auto, Prompts::PlayStation, Prompts::Xbox];
                         let at = order.iter().position(|&p| p == s.button_prompts).unwrap_or(0);
@@ -555,6 +597,25 @@ mod tests {
         s.msaa = 4;
         s.ambient_occlusion = true;
         assert!(o.lines(&s, &b).iter().any(|l| l.ends_with("SMAA (for 4x MSAA: ambient occlusion)")));
+    }
+
+    #[test]
+    fn camera_rows_toggle() {
+        let (mut o, mut s, mut b) = open();
+        assert_eq!(s.camera, CameraMode::Original);
+        while o.lines(&s, &b).iter().all(|l| !l.starts_with("> Camera")) {
+            o.input(Input::Down, &mut s, &mut b);
+        }
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::Changed);
+        assert_eq!(s.camera, CameraMode::Free);
+        assert!(o.lines(&s, &b).iter().any(|l| l == "> Camera               Free (right stick)"));
+        assert!(o.lines(&s, &b).iter().any(|l| l.starts_with("Free camera: right stick")));
+        o.input(Input::Down, &mut s, &mut b);
+        o.input(Input::Accept, &mut s, &mut b);
+        assert!(!s.camera_follow_rails);
+        o.input(Input::Down, &mut s, &mut b);
+        o.input(Input::Accept, &mut s, &mut b);
+        assert!(s.camera_invert);
     }
 
     #[test]

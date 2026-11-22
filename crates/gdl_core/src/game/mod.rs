@@ -468,6 +468,9 @@ pub struct Game {
     pub newcam_mode: i32,
     /// The gameplay camera (StdCam module, research/camera.md).
     pub std_camera: Option<camera::Camera>,
+    /// NATIVE: the player-controlled camera (off: the original camera;
+    /// decisions/0008).
+    pub free_cam: camera::FreeCam,
     /// The boss camera (BossCameraInit per level; used while BossCritInst).
     pub boss_camera: Option<camera::BossCamera>,
     /// Trigger camera state, the Tower's linked cameras and

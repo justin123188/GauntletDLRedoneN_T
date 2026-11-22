@@ -20,3 +20,4 @@ scph*
 *.mec
 __pycache__/
 /.venv/
+/target-win/

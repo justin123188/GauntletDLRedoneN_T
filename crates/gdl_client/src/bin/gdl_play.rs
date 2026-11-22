@@ -483,6 +483,34 @@ fn enhancement_input(
 
 /// The settings that live outside the systems reading them each frame:
 /// the window's sync and mode, every window camera's MSAA.
+/// NATIVE (decisions/0008): the previous level's free-camera zoom, for
+/// the next level's Game (which starts with a fresh FreeCam).
+#[derive(Resource, Default)]
+struct FreeCamZoom(Option<f32>);
+
+/// NATIVE (decisions/0008): the settings' free camera into the simulation
+/// before each step. Off in network play: every machine would need the
+/// same setting for the lockstep to agree.
+fn free_cam_settings(settings: Res<gdl_client::settings::Settings>, net: Res<Net>, sim: Option<ResMut<Sim>>, mut keep: ResMut<FreeCamZoom>) {
+    let Some(mut sim) = sim else { return };
+    let on = settings.camera == gdl_client::settings::CameraMode::Free && net.link.is_none() && net.game.is_none();
+    let f = &mut sim.bypass_change_detection().game.free_cam;
+    if !on {
+        f.enabled = false;
+        return;
+    }
+    f.enabled = true;
+    f.follow_rails = settings.camera_follow_rails;
+    f.invert_turn = settings.camera_invert;
+    if !f.carried {
+        if let Some(z) = keep.0 {
+            f.zoom = z;
+        }
+        f.carried = true;
+    }
+    keep.0 = Some(f.zoom);
+}
+
 fn apply_settings(settings: Res<gdl_client::settings::Settings>, mut windows: Query<&mut Window>, mut cams: Query<(&mut Msaa, Option<&bevy::camera::RenderTarget>), With<Camera>>) {
     if !settings.is_changed() {
         return;
@@ -11751,6 +11779,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .init_resource::<ChestNodes>()
         .init_resource::<ItemSlots>()
         .init_resource::<Net>()
+        .init_resource::<FreeCamZoom>()
         .init_resource::<MovieScreen>()
         .insert_resource(PsysClock { global: gdl_core::psys::PsysGlobal::new(1), accumulated: 0.0 })
         .init_resource::<EnemyFrames>()
@@ -11806,7 +11835,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .add_systems(PreUpdate, (net_poll, net_local_tick).chain())
         .add_systems(PostUpdate, (interpolate_transforms.before(bevy::transform::TransformSystems::Propagate), mark_shadow_casters, present_shadow_light))
         .add_systems(PostUpdate, order_visible_meshes.after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
-        .add_systems(FixedUpdate, (simulate, apply_rumble).chain().run_if(playing))
+        .add_systems(FixedUpdate, (free_cam_settings, simulate, apply_rumble).chain().run_if(playing))
         .add_systems(
             Update,
             (

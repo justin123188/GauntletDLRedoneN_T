@@ -624,6 +624,7 @@ impl Game {
                     None => None,
                 }
             },
+            free_cam: Default::default(),
             boss_camera: Some(super::camera::BossCamera::new(
                 super::camera::BossCamConsts::from_elf(inp.elf)?,
                 usize::try_from(level.boss_camera_index).ok().and_then(|k| inp.wdata.boss_cameras.get(k)).cloned(),

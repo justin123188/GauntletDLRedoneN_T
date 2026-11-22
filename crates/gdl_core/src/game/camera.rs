@@ -313,6 +313,87 @@ pub struct CamCtx<'a> {
     pub paused: i32,
     pub help: i32,
     pub game_mode: u32,
+    /// NATIVE (not in the original game): the player-controlled camera's
+    /// view on top of StdCam (decisions/0008). None: the original camera,
+    /// every computation as before.
+    pub free: Option<FreeView>,
+}
+
+/// NATIVE: what the player-controlled camera changes in UpdateCam — a yaw
+/// added to the rails' yaw, a factor on the follow distance and the
+/// players' limit radius, and whether the rails (transmitters) still turn
+/// the camera.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FreeView {
+    pub yaw: f32,
+    pub zoom: f32,
+    pub follow_rails: bool,
+}
+
+/// NATIVE: the player-controlled camera (Game::free_cam; decisions/0008).
+/// The right stick of any player whose control style leaves it free
+/// (Default, Arcade) turns the camera (left/right) and zooms it (up: in,
+/// down: out). Off (the default) keeps the original camera exactly.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FreeCam {
+    pub enabled: bool,
+    /// The level's camera rails still turn the camera as the players move
+    /// through the level (the yaw offset turns on top of them). Off: the
+    /// camera keeps the level start's direction plus the player's turn.
+    pub follow_rails: bool,
+    /// Turning direction reversed (stick right turns the view the other way).
+    pub invert_turn: bool,
+    /// Yaw offset from the rails' yaw (radians).
+    pub yaw: f32,
+    /// Distance factor (1: the original distance).
+    pub zoom: f32,
+    /// The front end has given this level the previous level's zoom (a
+    /// level's Game starts with a fresh FreeCam).
+    #[serde(skip)]
+    pub carried: bool,
+}
+
+impl Default for FreeCam {
+    fn default() -> Self {
+        Self { enabled: false, follow_rails: true, invert_turn: false, yaw: 0.0, zoom: 1.0, carried: false }
+    }
+}
+
+impl FreeCam {
+    /// Closest and farthest zoom (factors on the original follow distance).
+    pub const ZOOM_MIN: f32 = 0.55;
+    pub const ZOOM_MAX: f32 = 2.2;
+    /// Turn per 30 Hz update at full deflection (radians; about 100°/s).
+    pub const TURN_RATE: f32 = 0.058;
+    /// Zoom change per 30 Hz update at full deflection (factor).
+    pub const ZOOM_RATE: f32 = 0.022;
+    /// Stick magnitude below which the stick counts as centred.
+    pub const DEAD_ZONE: f32 = 0.3;
+
+    /// The view UpdateCam applies (None when off).
+    pub fn view(&self) -> Option<FreeView> {
+        self.enabled.then_some(FreeView { yaw: self.yaw, zoom: self.zoom, follow_rails: self.follow_rails })
+    }
+
+    /// One update's input: `turn` and `zoom_in` in −1..1 (stick right and
+    /// stick up positive), `k` the update's length in 30 Hz updates.
+    pub fn step(&mut self, turn: f32, zoom_in: f32, k: f32) {
+        let turn = if self.invert_turn { -turn } else { turn };
+        let mut yaw = self.yaw + turn * Self::TURN_RATE * k;
+        if PI < yaw {
+            yaw -= TWO_PI;
+        } else if yaw < -PI {
+            yaw += TWO_PI;
+        }
+        self.yaw = yaw;
+        self.zoom = (self.zoom * (1.0 - zoom_in * Self::ZOOM_RATE * k)).clamp(Self::ZOOM_MIN, Self::ZOOM_MAX);
+    }
+
+    /// Back to the original framing (the level start keeps the zoom).
+    pub fn recentre(&mut self) {
+        self.yaw = 0.0;
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -816,6 +897,15 @@ impl Camera {
         pitch_vec3(-pitch, yaw_vec3(-yaw, FVECTOR)?)
     }
 
+    /// The yaw the view uses: the record's, plus the free camera's offset
+    /// (NATIVE) when it is on.
+    fn view_yaw(ctx: &CamCtx, c: &Record) -> R<f32> {
+        match ctx.free {
+            Some(f) => wrap(add(c.f32_(o::YAW), f.yaw)?),
+            None => Ok(c.f32_(o::YAW)),
+        }
+    }
+
     /// LookInDirection 0x1d.. (the same algorithm as CamLookInDir) for the
     /// old camera.
     pub(crate) fn look_in_dir_pub(c: &mut Record, dir: V3) -> R<()> {
@@ -929,7 +1019,7 @@ impl Camera {
 
     /// CamUpdate 0x1140f0.
     fn cam_update(&mut self, ctx: &CamCtx, c: &mut Record) -> R<()> {
-        let look = Self::calc_lookdir(c.f32_(o::YAW), c.f32_(o::PITCH))?;
+        let look = Self::calc_lookdir(Self::view_yaw(ctx, c)?, c.f32_(o::PITCH))?;
         c.set_v3(o::LOOK, look);
         let (mut eye, mut target) = (c.v3(o::EYE), c.v3(o::TARGET));
         self.do_shake(ctx, &mut eye, &mut target)?;
@@ -1059,12 +1149,17 @@ impl Camera {
     /// stores the frustum normals at +0x40.
     fn calc_dist(&self, ctx: &CamCtx, c: &mut Record, max_radius: f32, hist_pos: V3) -> R<f32> {
         let look = c.v3(o::LOOK);
-        let planes = self.frustum_normals(c.f32_(o::YAW), look)?;
+        let planes = self.frustum_normals(Self::view_yaw(ctx, c)?, look)?;
         for (k, p) in planes.iter().enumerate() {
             c.set_v3(o::PLANES + 0x10 * k, *p);
         }
+        // NATIVE: the free camera's zoom scales the follow distance.
+        let follow = match ctx.free {
+            Some(f) => mul(self.dist_2c, f.zoom)?,
+            None => self.dist_2c,
+        };
         if ctx.num_in_game_players == 1 {
-            return Ok(if self.consts.perf_test == 0 { self.dist_2c } else { add(max_radius, self.consts.max_zoom_adjust)? });
+            return Ok(if self.consts.perf_test == 0 { follow } else { add(max_radius, self.consts.max_zoom_adjust)? });
         }
         let mut need = 0.0f32;
         for plane in planes.iter() {
@@ -1079,7 +1174,7 @@ impl Camera {
                 }
             }
         }
-        let d = self.dist_2c;
+        let d = follow;
         Ok(if sub(d, self.consts.zoom_adjust)? < need || max_radius <= d {
             if need <= sub(max_radius, self.consts.zoom_adjust)? {
                 add(need, self.consts.zoom_adjust)?
@@ -1107,7 +1202,13 @@ impl Camera {
         let t = self.transmitter_3d(at)?;
         // CurTransmitterBlink / StdCamMoveAvgArrow: arrow alpha and position
         // (presentation only).
-        let (yaw, pitch) = self.trans_yaw_pitch(t, ctx)?;
+        let (mut yaw, mut pitch) = self.trans_yaw_pitch(t, ctx)?;
+        if ctx.free.is_some_and(|f| !f.follow_rails) {
+            // NATIVE: the rails no longer turn the camera; a rotation in
+            // progress finishes, a new transmitter asks for none.
+            yaw = c.f32_(o::YAW);
+            pitch = c.f32_(o::PITCH);
+        }
         let rotating = self.limit_yaw_pitch(c, yaw, pitch, ctx.spf)?;
         let moving = self.limit_translate(c)?;
         let radius = if ctx.num_in_game_players == 1 && self.consts.perf_test == 0 {
@@ -1117,6 +1218,12 @@ impl Camera {
                 Some(r) if r != 0 => r as f32,
                 _ => mul(self.radius_30, self.consts.adjust_max_rad)?,
             }
+        };
+        // NATIVE: the players' limit (NewCamLimitPlayerDpos's apex) and
+        // CalcDist's cap follow the free camera's zoom.
+        let radius = match ctx.free {
+            Some(f) => mul(radius, f.zoom)?,
+            None => radius,
         };
         c.set_f32(o::MAX_RADIUS, radius);
         let hist = c.v3(o::HIST + 0xc * idx as usize);
@@ -2268,6 +2375,7 @@ impl super::Game {
             paused: g.paused,
             help: g.help,
             game_mode: g.game_mode,
+            free: self.free_cam.view(),
         }
     }
 
@@ -2312,6 +2420,32 @@ impl super::Game {
     /// a BossCritInst run BossCameraUpdate, otherwise StdCamUpdate
     /// (new_camera_switch is 1); an active trigger camera first.
     /// main's camera dispatch after game_main (replays).
+    /// NATIVE: one update of the free camera's input (FreeCam): the right
+    /// stick of every present player whose control style leaves it free
+    /// (not One Handed, mode 2, or Robotron, mode 3). Stick right turns,
+    /// stick up zooms in.
+    fn free_cam_input(&mut self) -> R<()> {
+        let (mut turn, mut zoom_in) = (0.0f32, 0.0f32);
+        for k in 0..4 {
+            let Ok(port) = usize::try_from(self.controls.joy_remap[k]) else { continue };
+            let mode = self.controls.control[k].i32_(0x2c);
+            if mode == 2 || mode == 3 {
+                continue;
+            }
+            let Some(&[a, m]) = self.controls.analog_right.get(port) else { continue };
+            if m <= FreeCam::DEAD_ZONE {
+                continue;
+            }
+            let s = ((m - FreeCam::DEAD_ZONE) / (1.0 - FreeCam::DEAD_ZONE)).min(1.0);
+            // calc_analog_stick: angle = atan2(left − right, down − up).
+            turn -= sinf(a)? * s;
+            zoom_in -= cosf(a)? * s;
+        }
+        let k = if 0.0 < self.globals.spf { (self.globals.spf * 30.0).min(4.0) } else { 1.0 };
+        self.free_cam.step(turn.clamp(-1.0, 1.0), zoom_in.clamp(-1.0, 1.0), k);
+        Ok(())
+    }
+
     pub fn camera_step_pub(&mut self) -> R<()> {
         self.camera_step()
     }
@@ -2329,6 +2463,11 @@ impl super::Game {
         let (mut wait, mut start) = (self.globals.cam_wait, self.globals.start_of_stage);
         let mode = self.globals.game_mode;
         let boss_path = matches!(mode, 0x4013 | 0x400d | 0x4017) || (mode & 0x8000 == 0 && self.boss_crit_inst != 0);
+        // NATIVE: the free camera's stick input (gameplay camera only; the
+        // boss and trigger cameras stay the original's).
+        if self.free_cam.enabled && !boss_path && self.globals.paused == 0 && self.globals.vb_elapsed != 0 {
+            self.free_cam_input()?;
+        }
         // main 0x1001e0: newcam_mode 0 for a boss or the old camera, 2 for
         // StdCamUpdate (the 0x4013/0x400d/0x4017 modes leave it).
         if mode & 0x8000 != 0 || (self.boss_crit_inst != 0 && !matches!(mode, 0x4013 | 0x400d | 0x4017)) {
@@ -2648,6 +2787,7 @@ impl super::Game {
                         paused: self.globals.paused,
                         help: self.globals.help,
                         game_mode: self.globals.game_mode,
+                        free: self.free_cam.view(),
                     };
                     let (p, any) = cam.player_avg(&ctx, 2)?;
                     any.then_some(p)
@@ -2702,5 +2842,35 @@ mod tests {
         let mut c = Record::zeroed(o::SIZE);
         c.set_i32(o::HIST_INDEX, 7);
         assert_eq!(Camera::hist_order(&c, 9), vec![7, 8, 0, 1, 2, 3, 4, 5, 6]);
+    }
+
+    /// NATIVE free camera (decisions/0008; synthetic): off gives no view,
+    /// turning wraps within ±π, zoom stays within its bounds, inversion
+    /// turns the other way.
+    #[test]
+    fn free_cam_steps_and_bounds() {
+        let mut f = FreeCam::default();
+        assert_eq!(f.view(), None);
+        f.enabled = true;
+        assert_eq!(f.view(), Some(FreeView { yaw: 0.0, zoom: 1.0, follow_rails: true }));
+        for _ in 0..200 {
+            f.step(1.0, 0.0, 1.0);
+            assert!((-PI..=PI).contains(&f.yaw));
+        }
+        for _ in 0..500 {
+            f.step(0.0, 1.0, 1.0);
+        }
+        assert_eq!(f.zoom, FreeCam::ZOOM_MIN);
+        for _ in 0..500 {
+            f.step(0.0, -1.0, 1.0);
+        }
+        assert_eq!(f.zoom, FreeCam::ZOOM_MAX);
+        f.recentre();
+        f.step(1.0, 0.0, 1.0);
+        assert!(0.0 < f.yaw);
+        f.recentre();
+        f.invert_turn = true;
+        f.step(1.0, 0.0, 1.0);
+        assert!(f.yaw < 0.0);
     }
 }
