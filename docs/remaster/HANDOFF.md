@@ -190,6 +190,15 @@ From `gdl_play.rs` and `docs/research/*.md`; all are environment variables.
 | `GDL_SCENE_DUMP` | Dumps the scene. |
 | F3 / F10 / F11 | Frame-rate counter / settings overlay / fullscreen. |
 
+Commands (no window):
+- `gdl_play --export-models CONFIG.json OUT_DIR [NAME ...]`: the model
+  exporter (decisions/0021). Names pick levels (G1) or packages
+  (ITEMS_G); none means everything (about 3.2 GB, 5 minutes on the
+  owner's PC). Never into the repository: the files come from the disc.
+- `blender --background --factory-startup --python
+  tools/blender/check_glb.py -- REPORT.json [--render DIR] FILE.glb ...`:
+  imports exports into empty scenes, reports counts and renders previews.
+
 The Python tools under `tools/python/` (`frozen_frames.py`, `perf_bench.py`,
 `menu_flows.py` …) assume Linux and Xvfb. Treat them as references, not as
 ready-to-run Windows tools.
@@ -304,10 +313,17 @@ later. And effects look better mostly through their textures.
      With ambient occlusion and sharpening on, Bevy ran SMAA and
      sharpening in either order; SMAA now runs first. Comparisons of
      frozen frames are exact again.
-   - Next: the model phase's M4, the Blender exporter (offered; the owner
-     asked for the potion glow first).
-   - Export the originals to glTF with skeletons; there is a scene glTF
-     exporter for research.
+   - M4, the exporter: built 2026-11-23 (decisions/0021; the owner: "Yes,
+     start it", the exporter and a test barrel before effects).
+     `gdl_play --export-models CONFIG.json OUT_DIR [NAME ...]` writes
+     every object of every level and shared package as `.glb`, and each
+     level's scene with its COLLISION and WATER layers. The owner's
+     Blender experience is basic, so the owner chooses and our scripts do
+     the work (models-plan.md "Tools for the owner").
+   - Next: a test prop through image-to-3D and our fitting script, and a
+     first model loader (M5). G1's barrel is a flip-book of 26 objects
+     (models-plan.md M4).
+   - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
      characters (they must fit the original rigs and animations). Image-to-3D
@@ -370,8 +386,8 @@ memory. The port stays the base.
       the 0.75 s flare, "yes .75 feels much better".
 - [ ] Barrels missing, chests and portal spirals still (the owner's
       playtest 2026-11-23, G1, one session; maybe a one-off): not
-      reproduced yet. Suspect in research/unknowns.md "Item trees after
-      another level".
+      reproduced yet. The owner saw them fine again later that day.
+      Suspect in research/unknowns.md "Item trees after another level".
 - [x] Frames that varied from run to run (decisions/0020): fixed
       2026-11-23, SMAA before sharpening.
 - [ ] Interpolation while the simulation waits (research/unknowns.md):
@@ -383,3 +399,6 @@ memory. The port stays the base.
       Moss, bushes and corn sway; G1's ground grass clumps do not, and
       the owner wants them replaced in the vegetation overhaul instead.
 - [ ] Camera follow-ups (§3) as the owner asks.
+- [x] Model exporter (decisions/0021): built and checked in Blender 5.3.0
+      2026-11-23. Next: a test prop (image-to-3D, our fitting script) and
+      the first model loader (M5).

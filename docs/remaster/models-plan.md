@@ -41,15 +41,16 @@ Every feature below is NATIVE: a setting that is off in
 
 ## How replacement works
 
-1. **Export.** An F10 button, or a command, writes the originals to
-   `model_work\export\` beside the game:
+1. **Export.** A command (`gdl_play --export-models`, decisions/0021;
+   built 2026-11-23) writes the originals to a folder (for the owner's
+   copies, `model_work\export\` beside the game):
    - one `.glb` per object;
    - one scene per level, holding every placed object, the collision as a
-     separate layer that is never drawn, and the water heights.
+     separate layer that is never drawn, and the water surfaces.
 
-   You model in place in Blender. Characters get their skeleton (node names,
-   rest pose), their pieces and a few clips for preview. Exports are
-   disc-derived, so they are never uploaded.
+   New models are made in place against these. Characters get their
+   skeleton (node names, rest pose), their pieces and a few clips for
+   preview, with M8. Exports are disc-derived, so they are never uploaded.
 2. **Model pack.** `model_pack\<source>\<LABEL>.glb` beside the game
    replaces object LABEL of that package, like `texture_pack\` does for
    textures. A missing or broken file falls back to the original model, with
@@ -146,7 +147,18 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
 
 ## Tools for the owner
 
-- **Blender** (free): the current release, pinned once installed.
+**The owner's Blender experience is basic** (2026-11-23: "blender
+experience is limited to make a cube of water smash into a sphere"). So
+the owner chooses and scripts do the work: concept art, then an
+image-to-3D tool, then our script fits the model to the original (size,
+place, facing, polygon count, ground contact) and saves it into
+`model_pack\`, then F5 in the game, and the owner says yes or "try
+again". Blender by hand only for touch-ups, with click-by-click steps for
+that one job.
+
+- **Blender** (free): the current release, pinned once installed. Our
+  scripts run it hidden (`--background`); tools/blender/check_glb.py
+  imports exports and renders previews (decisions/0021).
 - **A small Blender script or add-on from us.** It imports an export,
   checks size, pivot and polygon count, and saves into `model_pack\` under
   the right name.
@@ -172,7 +184,16 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
    and reeds stay still; the owner wants them replaced in V2 rather than
    tuned.
 4. **M4** Exporter: objects, level scenes and the collision layer, checked
-   in Blender on Windows.
+   in Blender on Windows. Built 2026-11-23 (decisions/0021): every
+   object of every level and shared package, and each level's scene with
+   its COLLISION and WATER layers. Not yet: the player characters'
+   models and skeletons (M8) and the items' own collision (counted).
+   Checked in Blender 5.3.0: the counts agree, the textures load, and
+   G1's collision lies on its paths and floors.
+   The first test prop: G1's barrel is a flip-book (ITEMS_G
+   BAROBJIDLE15F01 standing, BAROBJACTI16F01..F24 breaking,
+   BAROBJDONE17F24 broken), so a replacement of the standing frame alone
+   shows until the barrel is hit.
 5. **M5** Model pack loader for props, with light transfer, F5 and the
    fallback. A handful of props on the first test level.
 6. **M6** Replacement ground for one level, with the collision checker.

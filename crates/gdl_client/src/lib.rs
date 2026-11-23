@@ -12,6 +12,7 @@ pub mod hd;
 pub mod hud_layout;
 pub mod material_maps;
 pub mod menu;
+pub mod model_export;
 pub mod movie;
 pub mod net;
 pub mod settings;
@@ -87,8 +88,38 @@ pub fn mesh_for(part: &gdl_formats::objects::Part) -> Result<Mesh, Box<dyn Error
     Ok(mesh_and_colours(part)?.0)
 }
 
+/// A part's vertex streams as the renderer draws them (one triangle list).
+pub struct PartGeometry {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub uvs: Vec<[f32; 2]>,
+    /// The second UV set, when the part's strips carry lightmap UVs.
+    pub lightmap_uvs: Option<Vec<[f32; 2]>>,
+    /// GS colours on the 0x80 = 1.0 scale (1.0 where a strip has none).
+    pub colors: Vec<[f32; 4]>,
+    /// Whether any strip carries a colour stream.
+    pub coloured: bool,
+    pub indices: Vec<u32>,
+}
+
 /// The part's mesh and whether it carries a colour stream.
 pub fn mesh_and_colours(part: &gdl_formats::objects::Part) -> Result<(Mesh, bool), Box<dyn Error>> {
+    let g = part_geometry(part)?;
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, g.positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, g.normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, g.uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, g.colors)
+        .with_inserted_indices(Indices::U32(g.indices));
+    if let Some(lightmap_uvs) = g.lightmap_uvs {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, lightmap_uvs);
+    }
+    Ok((mesh, g.coloured))
+}
+
+/// The part's strips as one triangle list (mesh_and_colours; NATIVE, this
+/// fork: shared with the model exporter, decisions/0021).
+pub fn part_geometry(part: &gdl_formats::objects::Part) -> Result<PartGeometry, Box<dyn Error>> {
     let geometry = part.decode_integer_geometry()?;
     let coloured = geometry.strips.iter().any(|s| !s.packed_colors.is_empty());
     let mut positions = Vec::new();
@@ -118,16 +149,7 @@ pub fn mesh_and_colours(part: &gdl_formats::objects::Part) -> Result<(Mesh, bool
         normals.extend(strip.normals);
         uvs.extend(strip.uvs);
     }
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
-        .with_inserted_indices(Indices::U32(indices));
-    if with_lightmap {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, lightmap_uvs);
-    }
-    Ok((mesh, coloured))
+    Ok(PartGeometry { positions, normals, uvs, lightmap_uvs: with_lightmap.then_some(lightmap_uvs), colors, coloured, indices })
 }
 
 /// Registers the GS-equivalent material and its embedded shader.

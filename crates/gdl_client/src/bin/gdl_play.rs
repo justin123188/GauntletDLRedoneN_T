@@ -11882,6 +11882,60 @@ fn config_catalog(config_path: &Path) -> Result<(Value, gdl_client::catalog::Cat
     Ok((cfg, catalog))
 }
 
+/// NATIVE (this fork, decisions/0021): --export-models, the configuration's
+/// levels (each level's own package and scene) and packages as glTF files.
+fn export_models_cli(config: &Path, out: &Path, names: &[String]) -> Result<(), Box<dyn Error>> {
+    use gdl_client::model_export::{LevelSource, PackageSource};
+    let out = std::path::absolute(out)?;
+    let config = std::path::absolute(config)?;
+    let (cfg, _) = config_catalog(&config)?;
+    let wanted = |n: &str| names.is_empty() || names.iter().any(|w| *w == n.to_uppercase());
+    let source = |name: &str, p: &Value| -> Result<PackageSource, Box<dyn Error>> {
+        let path = |k: &str| -> Result<std::path::PathBuf, Box<dyn Error>> { Ok(p[k].as_str().ok_or_else(|| format!("{name}: no {k}"))?.into()) };
+        Ok(PackageSource { name: name.to_string(), objects: path("objects")?, texdef: path("texdef")?, textures: path("textures")? })
+    };
+    let mut levels = Vec::new();
+    // A level listed again with the same files is exported once; another
+    // level of the same name gets "-2", "-3".
+    let mut files = std::collections::HashSet::new();
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    for l in cfg["levels"].as_array().ok_or("config levels")? {
+        let name = l["name"].as_str().ok_or("level name")?;
+        let worlds = l["worlds"].as_str().ok_or("level worlds")?;
+        if !wanted(name) || !files.insert((l["level"]["objects"].as_str().unwrap_or("").to_string(), worlds.to_string())) {
+            continue;
+        }
+        let n = seen.entry(name.to_string()).or_insert(0);
+        *n += 1;
+        let folder = if *n == 1 { name.to_string() } else { format!("{name}-{n}") };
+        levels.push(LevelSource { package: source(&folder, &l["level"])?, worlds: worlds.into(), title: l["title"].as_str().unwrap_or("").to_string() });
+    }
+    let mut packages = Vec::new();
+    if let Some(map) = cfg["packages"].as_object() {
+        for (k, p) in map {
+            if wanted(k) {
+                packages.push(source(k, p)?);
+            }
+        }
+    }
+    if levels.is_empty() && packages.is_empty() {
+        return Err(format!("no level or package named {names:?} in the configuration").into());
+    }
+    let t = std::time::Instant::now();
+    let report = gdl_client::model_export::export(&out, &packages, &levels, &mut |s| println!("export {s}"))?;
+    for (name, c) in &report.levels {
+        println!(
+            "{name}: {} placed objects ({} hidden), {} collision and {} water triangles ({} through the grid only), {} item triangles (not exported), {} unused",
+            c.placed, c.hidden, c.collision_triangles, c.water_triangles, c.grid_only_triangles, c.item_triangles, c.unreferenced_triangles
+        );
+    }
+    for u in &report.unsupported {
+        println!("left out: {u}");
+    }
+    println!("{} files, {:.1} MB, {} parts left out, {:.1} s: {}", report.files, report.bytes as f64 / 1e6, report.unsupported.len(), t.elapsed().as_secs_f64(), out.display());
+    Ok(())
+}
+
 /// RESEARCH (--hd-census): every texture with its uses, as JSON.
 fn hd_census_cli(config: &Path, out: &Path) -> Result<(), Box<dyn Error>> {
     let out = std::path::absolute(out)?;
@@ -12029,6 +12083,16 @@ fn run() -> Result<(), Box<dyn Error>> {
         && flag == "--hd-generate"
     {
         return hd_generate_cli(Path::new(config), Path::new(out));
+    }
+    // NATIVE (this fork, decisions/0021): gdl_play --export-models
+    // CONFIG.json OUT_DIR [NAME ...], the model exporter
+    // (gdl_client::model_export; no window): every level and package, or
+    // only the levels and packages named.
+    if let [flag, config, out, names @ ..] = args.as_slice()
+        && flag == "--export-models"
+    {
+        let names: Vec<String> = names.iter().map(|n| n.to_string_lossy().to_uppercase()).collect();
+        return export_models_cli(Path::new(config), Path::new(out), &names);
     }
     // RESEARCH: gdl_play --hd-check WEIGHTS DUMP_DIR PACK_DIR [LIMIT]: the
     // GPU network (gdl_client::hd) on a GDL_TEXTURE_DUMP directory against a

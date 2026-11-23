@@ -1108,6 +1108,22 @@ fn next_grid(c: &Ctx, world: &CollisionWorld, dx: f32, dz: f32, slope: f32, r: f
 }
 
 impl Triangle {
+    /// NATIVE (this fork, decisions/0021, the model exporter): the
+    /// triangle's corners in its object's space — the origin and the two
+    /// local-plane vertices through WorldVectorNorm, as BTriLineCol turns
+    /// its local hit back (presentation only; the simulation never calls it).
+    pub fn corners(&self) -> R<[V3; 3]> {
+        let [u1, v1, u2, v2] = self.uv;
+        let a = vadd(world_vector_norm([u1, 0.0, v1], self.scale, self.normal)?, self.origin)?;
+        let b = vadd(world_vector_norm([u2, 0.0, v2], self.scale, self.normal)?, self.origin)?;
+        Ok([self.origin, a, b])
+    }
+
+    #[cfg(test)]
+    fn flat(origin: V3, uv: [f32; 4]) -> Self {
+        Self { min_y64: 0, max_y64: 0, scale: f32::INFINITY, normal: [0.0, 1.0, 0.0], origin, uv }
+    }
+
     fn from_record(r: &CollisionRecord) -> Self {
         let s = |v: i16| f32::from(v) * 0.015625;
         Self {
@@ -1609,6 +1625,33 @@ pub fn roll_mat3(m: &mut [V3; 3], a: f32) -> R<()> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Synthetic: a flat triangle's corners are the origin plus (u, 0, v);
+    /// a sloped one's lie on its plane, and BTriLineCol hits a line through
+    /// their centroid there (the exporter's corners agree with the test).
+    /// BTriLineCol's edge tests hit only triangles whose (corner 1 −
+    /// origin) × (corner 2 − origin) points along the normal.
+    #[test]
+    fn triangle_corners_match_the_line_test() {
+        let flat = super::Triangle::flat([1.0, 2.0, 3.0], [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(flat.corners().unwrap(), [[1.0, 2.0, 3.0], [2.0, 2.0, 3.0], [1.0, 2.0, 4.0]]);
+        let l = (0.3f32 * 0.3 + 0.9 * 0.9 + 0.1 * 0.1).sqrt();
+        let n = [0.3 / l, 0.9 / l, 0.1 / l];
+        let k = 1.0 / (n[0] * n[0] + n[2] * n[2]).sqrt();
+        let tri = super::Triangle { normal: n, scale: k, origin: [5.0, 1.0, -2.0], uv: [0.5, 2.5, 2.0, 0.5], ..flat };
+        let c = tri.corners().unwrap();
+        let mid: [f32; 3] = std::array::from_fn(|a| (c[0][a] + c[1][a] + c[2][a]) / 3.0);
+        for v in c {
+            let d: f32 = (0..3).map(|a| (v[a] - tri.origin[a]) * n[a]).sum();
+            assert!(d.abs() < 1e-5, "corner off the plane by {d}");
+        }
+        let above: [f32; 3] = std::array::from_fn(|a| mid[a] + n[a]);
+        let below: [f32; 3] = std::array::from_fn(|a| mid[a] - n[a]);
+        let (_, hit) = super::tri_line_col(&tri, above, below).unwrap().expect("the line through the centroid hits");
+        for a in 0..3 {
+            assert!((hit[a] - mid[a]).abs() < 1e-4, "hit {hit:?} centroid {mid:?}");
+        }
+    }
 
     #[test]
     fn next_dyn_grid_clamps_rows_with_the_truncated_end_x() {
