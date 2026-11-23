@@ -116,6 +116,7 @@ The owner's playtest (2026-11-22, the build of e26c5f0): "Looks good".
 Not done:
 - water ripples and flow (M2), foliage sway and light through leaves
   (M3), lava glow, gem sparkle;
-- a global strength setting;
+- a global strength setting. The owner: tune when better models and
+  textures exist;
 - choosing types on the texture page itself (materials.tsv is edited by
   hand).
