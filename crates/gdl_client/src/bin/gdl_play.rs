@@ -3099,15 +3099,24 @@ fn present_scene_light(
 /// ambient add, as MBTreeSetAmbientAdd). While a gem sparkle plays
 /// (EffectHeaders 0x45..0x4f, StartGemFX), its light flares: it rises over
 /// the first quarter (the particles forming) and falls to nothing by the
-/// end (as they fade). Presentation only: the simulation is not read back.
+/// end (as they fade). Magic potions (pickup subtype 4, decisions/0019)
+/// glow the same way in their bottle's colour; they have no pickup
+/// sparkle, so their flare starts as they are taken and lasts as long as
+/// the rune's sparkle. Presentation only: the simulation is not read back.
 #[derive(Resource, Default)]
 struct GemGlow {
     /// Point lights for present_point_lights ([x, y, z, radius, r, g, b,
     /// attenuation], render space).
     lights: Vec<[f32; 8]>,
-    /// Each gem's colour by item slot (with its definition, its place):
-    /// the pickup's flare takes the colour of the gem last seen there.
-    seen: HashMap<usize, (usize, Vec3, Vec3)>,
+    /// Each gem's and potion's colour by item slot (with its definition,
+    /// its place, whether it is a gem): a gem pickup's flare takes the
+    /// colour of the gem last seen there.
+    seen: HashMap<usize, (usize, Vec3, Vec3, bool)>,
+    /// The potions being taken whose flare has started (their records
+    /// expiring: +0xd8 0x100).
+    taken: std::collections::HashSet<usize>,
+    /// The potions' flares: their place, colour and the ATime they started.
+    flares: Vec<(Vec3, Vec3, f32)>,
 }
 
 /// NATIVE values chosen by eye: a resting gem's light reach and
@@ -3122,6 +3131,26 @@ const GEM_AMBIENT: f32 = 0.6;
 
 fn is_gem(d: &gdl_core::items::Definition) -> bool {
     d.kind() == 1 && matches!(d.subtype(), 0xf | 10 | 0x10)
+}
+
+/// NATIVE (decisions/0019): the magic potions (GrabPowerup's subtype 4).
+fn is_potion(d: &gdl_core::items::Definition) -> bool {
+    d.kind() == 1 && d.subtype() == 4
+}
+
+/// NATIVE (decisions/0019): a potion's flare lasts as long as the rune's
+/// pickup sparkle (EffectHeaders 0x4f, timed as StartFXTree times it:
+/// frames × timing × 0x3a91a2aa, about 1/900), one second without it.
+fn potion_flare_length(t: &gdl_core::game::effects::EffectTables) -> f32 {
+    t.headers
+        .get(0x4f)
+        .copied()
+        .flatten()
+        .map_or(1.0, |h| {
+            let frames = if h.frames == 0 { 0x1e } else { h.frames };
+            f32::from(frames) * f32::from(h.timing) * f32::from_bits(0x3a91_a2aa)
+        })
+        .max(0.1)
 }
 
 /// The flare's strength at `t` of its effect's time (0..1).
@@ -3156,8 +3185,14 @@ fn present_gem_glow(
     glow.lights.clear();
     if !settings.gem_glow {
         glow.seen.clear();
+        glow.taken.clear();
+        glow.flares.clear();
         return;
     }
+    // DEBUG GDL_DEBUG_GLOW=1: each glowing item's name, place, subtype,
+    // potion flags and colour, once, and each potion flare.
+    static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let debug = *DEBUG.get_or_init(|| std::env::var_os("GDL_DEBUG_GLOW").is_some());
     let g = &sim.game;
     for (slot, kids, vis) in &slots {
         // Only items present_world draws (a chest's closed content, a
@@ -3169,7 +3204,8 @@ fn present_gem_glow(
         let d = &g.items.definitions[r.definition()];
         // Drawn as present_world draws items (0x800: a Tower crystal still
         // hidden; +0xe1: hidden for this player count).
-        if !is_gem(d) || !r.active() || r.u16_(0xd8) & 0x8900 != 0 || r.u8_(0xe1) != 0 {
+        let potion = is_potion(d);
+        if !(is_gem(d) || potion) || !r.active() || r.u16_(0xd8) & 0x8900 != 0 || r.u8_(0xe1) != 0 {
             continue;
         }
         let mut stack: Vec<Entity> = kids.iter().collect();
@@ -3187,16 +3223,22 @@ fn present_gem_glow(
         }
         let p = (Vec3::from_array(r.position()) + Vec3::Y * 0.5) * MIRROR;
         let colour = match glow.seen.get(&slot.index) {
-            Some(&(def, _, c)) if def == r.definition() => c,
+            Some(&(def, _, c, _)) if def == r.definition() => c,
             _ => {
+                // A gem's or a potion's textures' colour (a potion's magic
+                // light would not do: start_magic lights a blue potion's
+                // magic white, decisions/0019).
                 let handles: Vec<_> = meshes.iter().map(|(_, h)| h.clone()).collect();
-                match gem_colour(&handles, &materials, &images) {
-                    Some(c) => c,
-                    None => continue,
+                let Some(c) = gem_colour(&handles, &materials, &images) else { continue };
+                if debug {
+                    let flags = u32::from_le_bytes([d.0[0x3c], d.0[0x3d], d.0[0x3e], d.0[0x3f]]);
+                    let [x, y, z] = r.position();
+                    eprintln!("glow: item {} {} at {x:.1} {y:.1} {z:.1} (subtype {:#x}, +0x3c {flags:#x}): colour {:.2} {:.2} {:.2}", slot.index, String::from_utf8_lossy(d.name()), d.subtype(), c.x, c.y, c.z);
                 }
+                c
             }
         };
-        glow.seen.insert(slot.index, (r.definition(), p, colour));
+        glow.seen.insert(slot.index, (r.definition(), p, colour, !potion));
         for (e, _) in &meshes {
             req.get(*e).glow += GEM_AMBIENT;
         }
@@ -3218,9 +3260,32 @@ fn present_gem_glow(
         }
         let k = gem_flare((atime - n.start) / duration);
         let p = (Vec3::from_array(n.position) + Vec3::Y * 0.5) * MIRROR;
-        let colour = glow.seen.values().filter(|(_, q, _)| q.distance(p) < 3.0).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p))).map_or(Vec3::ONE, |&(_, _, c)| c);
+        let colour = glow.seen.values().filter(|(_, q, _, gem)| *gem && q.distance(p) < 3.0).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p))).map_or(Vec3::ONE, |&(_, _, c, _)| c);
         let c = colour * (GEM_REST + GEM_FLARE * k);
         glow.lights.push([p.x, p.y, p.z, GEM_RADIUS * (1.0 + GEM_FLARE_REACH * k), c.x, c.y, c.z, GEM_ATTENUATION]);
+    }
+    // NATIVE (decisions/0019): a potion has no pickup sparkle. Its flare
+    // starts as GrabPowerup takes it (ExpireItem: +0xd8 0x100; DeleteItem
+    // follows a few updates later), at the place it was last drawn, and
+    // lasts as long as the rune's sparkle, with the gems' rise and fade.
+    let records = &g.items.records;
+    let GemGlow { lights, seen, taken, flares } = &mut *glow;
+    let expiring = |s: usize, def: usize| records.get(s).is_some_and(|r| r.definition() == def && r.active() && r.u16_(0xd8) & 0x100 != 0);
+    taken.retain(|&s| records.get(s).is_some_and(|r| r.active() && r.u16_(0xd8) & 0x100 != 0));
+    let length = potion_flare_length(&g.effects.tables);
+    for (&s, &(def, p, c, gem)) in seen.iter() {
+        if !gem && expiring(s, def) && taken.insert(s) {
+            if debug {
+                eprintln!("glow: potion item {s} taken at ATime {atime:.2}: a flare of {length:.2} s");
+            }
+            flares.push((p, c, atime));
+        }
+    }
+    flares.retain(|&(_, _, start)| (0.0..1.0).contains(&((atime - start) / length)));
+    for &(p, colour, start) in flares.iter() {
+        let k = gem_flare((atime - start) / length);
+        let c = colour * (GEM_REST + GEM_FLARE * k);
+        lights.push([p.x, p.y, p.z, GEM_RADIUS * (1.0 + GEM_FLARE_REACH * k), c.x, c.y, c.z, GEM_ATTENUATION]);
     }
 }
 
@@ -12955,6 +13020,18 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// NATIVE (this fork, decisions/0019): magic potions (pickup subtype 4)
+    /// are found as their own kind, not as gems.
+    #[test]
+    fn potions_glow_as_gems_do() {
+        let mut d = gdl_core::items::Definition([0; gdl_core::items::DEFINITION]);
+        d.set_i32(0, 1);
+        d.set_i32(4, 4);
+        assert!(is_potion(&d) && !is_gem(&d));
+        d.set_i32(4, 0xf);
+        assert!(!is_potion(&d) && is_gem(&d));
+    }
 
     /// NATIVE (this fork, decisions/0018): the pickup flare rises over the
     /// first quarter of the sparkle and falls to nothing by its end.

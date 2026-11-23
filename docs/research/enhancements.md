@@ -42,7 +42,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | material_detail | true | false | NATIVE (this fork): bump and shine maps on the opaque and cut-out textures, lit by the point, torch and level lights; made as a level loads (Material detail, below) |
 | water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
 | plant_effects | true | false | NATIVE (this fork): leaves, moss and grass sway; point lights shine through leaves; marked as a level loads (Plant effects, below) |
-| gem_glow | true | false | NATIVE (this fork): crystals, runestones and gargoyle items glow in their colour and flare while their pickup sparkle plays (Gem glow, below) |
+| gem_glow | true | false | NATIVE (this fork): crystals, runestones, gargoyle items and magic potions glow in their colour and flare when picked up (Gem glow, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -688,6 +688,14 @@ decisions/0018-gem-glow.md.
   to nothing at the end.
 - **How.** gdl_play present_gem_glow feeds present_point_lights. A MatReq
   `glow` brightens the gem without blending it.
+- **Potions** (decisions/0019-potion-glow.md, the same switch, now "Gem
+  and potion glow"). Magic potions (pickup subtype 4) glow the same way,
+  in their bottle's colour (the magic's own light colour, start_magic's
+  light_color[mclr_idx[colour]], lights a blue potion white). They have
+  no pickup sparkle: the flare starts as the potion's record expires
+  (+0xd8 0x100, GrabPowerup) and lasts as long as the rune's sparkle
+  (EffectHeaders 0x4f, one second). GDL_DEBUG_GLOW=1 lists the glowing
+  items and the flares.
 
 ## Settings overlay and keys
 

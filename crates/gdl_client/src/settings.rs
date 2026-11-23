@@ -94,9 +94,9 @@ pub struct Settings {
     /// the wind, and the point lights shine through leaves. Marked as a
     /// level loads.
     pub plant_effects: bool,
-    /// NATIVE (this fork, decisions/0018): crystals, runestones and
-    /// gargoyle items glow softly in their colour while they lie in the
-    /// level, and flare while their pickup sparkle plays.
+    /// NATIVE (this fork, decisions/0018, 0019): crystals, runestones,
+    /// gargoyle items and magic potions glow softly in their colour while
+    /// they lie in the level, and flare when they are picked up.
     pub gem_glow: bool,
     /// Anti-aliasing by SMAA (a post-process) instead of MSAA.
     pub smaa: bool,

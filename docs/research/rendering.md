@@ -422,7 +422,10 @@ frame compared (GUI flow menu-flows-m17-v15 streak shows the trail).
   the port lit them through their +z normal). HYPOTHESIS: no life fade.
   Every SfxSetLight caller is ported
   (ghidra-fxlight1): StartMagicFX / StartThrowMagicFX / StartShieldFX (1.5
-  × power, light_color[mclr_idx[potion colour]]); StartComboFX (10,
+  × power, light_color[mclr_idx[potion colour]]; read natively 2026-11-22:
+  mclr_idx (6, 0, 6, 3, 1), light_color rows red, green, blue, yellow,
+  magenta, cyan at 2.0 and white 1.0, so a blue potion's magic (colour 2)
+  is lit white, as an untyped one; decisions/0019); StartComboFX (10,
   light_color[pclr_idx[colour b]] = (3, 2, 0, 1): yellow, blue, red, green;
   the tree coloured streak_color[b] with MBTreeSetAmbientAdd 0x1ff, the
   second tree ambient add 0x1ff too); StartFamiliarFireBall (3,

@@ -295,14 +295,13 @@ later. And effects look better mostly through their textures.
      → Graphics → Gem glow). Crystals, runes and gargoyle items glow in
      their colour and flare while their pickup sparkle plays. Part of
      item 3, effects.
-   - Next, the owner (2026-11-22): the same glow for magic potions — a
-     soft resting glow, a flare when picked up. To research first: the
-     potion pickups' subtypes and colours (POTION_ICON_GRE/YEL/RED/BLU
-     suggest coloured potions), and whether their pickup starts an effect
-     the flare can follow (gems: StartGemFX). If not, a NATIVE flare of its
-     own length from the pickup. Extend present_gem_glow (gdl_play) and
-     decisions/0018, or a new record. Then the model phase's M4, the
-     Blender exporter (offered; the owner asked for the potion glow first).
+   - The owner's request, the same glow for magic potions: built
+     2026-11-22 (decisions/0019; F10 → Graphics → Gem and potion glow).
+     Potions glow in their bottle's colour; with no pickup sparkle of
+     their own, they flare from the pickup for the rune sparkle's length
+     (one second).
+   - Next: the model phase's M4, the Blender exporter (offered; the owner
+     asked for the potion glow first).
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
@@ -363,6 +362,8 @@ memory. The port stays the base.
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
       "Looks good". G1's swamp fixed afterwards (decisions/0017): it
       needs a look in play.
+- [ ] Potion glow (decisions/0019): built 2026-11-22; the owner's
+      playtest next.
 - [x] Gem glow (decisions/0018): the owner's playtest 2026-11-22, "Looks
       good".
 - [x] Plant effects (decisions/0017): the owner's playtest 2026-11-22.

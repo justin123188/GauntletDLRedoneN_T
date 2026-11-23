@@ -323,7 +323,7 @@ impl Overlay {
                     // NATIVE (this fork, decisions/0017).
                     GRow::Plants => format!("Plant effects        {}", on(s.plant_effects)),
                     // NATIVE (this fork, decisions/0018).
-                    GRow::GemGlow => format!("Gem glow             {}", on(s.gem_glow)),
+                    GRow::GemGlow => format!("Gem and potion glow  {}", on(s.gem_glow)),
                     GRow::HdTextures => format!(
                         "HD textures          {}",
                         match (s.hd_textures, &self.hd) {
@@ -371,8 +371,8 @@ impl Overlay {
                 out.push("spells shine through leaves. Turned on, from the next level.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::GemGlow) {
-                out.push("Gem glow: crystals, runestones and gargoyle items glow softly in their".to_string());
-                out.push("colour, and flare while their pickup sparkle plays.".to_string());
+                out.push("Gem and potion glow: crystals, runestones, gargoyle items and magic".to_string());
+                out.push("potions glow softly in their colour, and flare when picked up.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
