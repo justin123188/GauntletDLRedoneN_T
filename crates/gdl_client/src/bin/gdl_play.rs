@@ -3247,6 +3247,7 @@ fn present_water_clock(sim: Res<Sim>, queue: Res<bevy::render::renderer::RenderQ
 /// dark-level light), nearest 8 to the camera, on every material
 /// (pbDrawObject runs pbSetupPosLights for each object). HYPOTHESIS: the
 /// life fade of the radius is not applied.
+#[allow(clippy::too_many_arguments)]
 fn present_point_lights(
     sim: Res<Sim>,
     settings: Res<gdl_client::settings::Settings>,
