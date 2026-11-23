@@ -86,8 +86,8 @@ APPDATA, GDL_NO_GAMEPADS):
   GDL_BASELINE=1.
 - **Cost.** At 2560×1440 with C1's water over half the view, the median
   uncapped frame is 5.44 ms off and 5.47–5.90 ms on.
-- **Not verified.** The motion: the frozen frames show one moment. That
-  waits for the owner's playtest.
+- **The owner's playtest.** 2026-11-22, the build of 7eac8f0, in motion:
+  "Looks good".
 
 Not done:
 - replacement water meshes with real waves (M2's W2);

@@ -346,6 +346,6 @@ memory. The port stays the base.
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
 - [x] Material detail (decisions/0015): the owner's playtest 2026-11-22,
       "Looks good".
-- [ ] Water effects (decisions/0016): built 2026-11-22; the owner's
-      playtest next (the glints' strength wants judging in motion).
+- [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
+      "Looks good".
 - [ ] Camera follow-ups (§3) as the owner asks.
