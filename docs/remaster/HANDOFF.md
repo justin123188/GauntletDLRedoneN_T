@@ -289,6 +289,10 @@ later. And effects look better mostly through their textures.
      guessed from the labels, gems included).
    - M2, water effects: built 2026-11-22 (decisions/0016; F10 →
      Graphics → Water effects; C1's channels show it well).
+   - M3, plant effects: built 2026-11-22 (decisions/0017; F10 →
+     Graphics → Plant effects; G1's moss and grass).
+   - Next, the owner's idea (2026-11-22): a soft glow on gemstones that
+     brightens while their pickup particles form and dims as they fade.
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
@@ -347,5 +351,8 @@ memory. The port stays the base.
 - [x] Material detail (decisions/0015): the owner's playtest 2026-11-22,
       "Looks good".
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
-      "Looks good".
+      "Looks good". G1's swamp fixed afterwards (decisions/0017): it
+      needs a look in play.
+- [ ] Plant effects (decisions/0017): built 2026-11-22; the owner's
+      playtest next.
 - [ ] Camera follow-ups (§3) as the owner asks.

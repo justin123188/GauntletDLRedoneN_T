@@ -164,7 +164,10 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
 2. **M2** Water shader on today's water. Built 2026-11-22
    (decisions/0016): ripples, a wobbling texture, glints, a sheen and soft
    shores. The owner's playtest: "Looks good".
-3. **M3** Foliage on today's plants: sway, edges, light through.
+3. **M3** Foliage on today's plants: sway, edges, light through. Built
+   2026-11-22 (decisions/0017): sway and light through leaves. Softer
+   edges wait for MSAA, which ambient occlusion turns off. The owner's
+   playtest is next.
 4. **M4** Exporter: objects, level scenes and the collision layer, checked
    in Blender on Windows.
 5. **M5** Model pack loader for props, with light transfer, F5 and the

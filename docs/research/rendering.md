@@ -108,8 +108,10 @@ NATIVE (this fork, decisions/0015): material detail.
   computes what it did before: frames are pixel-identical.
 - **Water** (decisions/0016). GsParams depth.z 1 marks a water surface,
   and enhance2.z switches the water shading. PointLights gained `water`:
-  x the water's clock, yzw the colour it reflects. The buffer is now
-  32 × 32 + 64 bytes.
+  x the water's clock, yzw the colour it reflects.
+- **Plants** (decisions/0017). depth.z 2 marks foliage and 3 grass;
+  PointLights.enhance3.x switches the plant shading. The buffer is now
+  32 × 32 + 80 bytes.
 
 ## Verification
 

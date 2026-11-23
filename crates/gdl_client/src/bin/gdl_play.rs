@@ -846,12 +846,13 @@ fn apply_graphics(
     let sharp = s.texture_filter == gdl_client::settings::TextureFilter::Sharp;
     // TEST switch GDL_SHARP_BIAS: the sharp filter's LOD bias (experiments).
     let lod_bias = std::env::var("GDL_SHARP_BIAS").ok().and_then(|v| v.parse().ok()).unwrap_or(gdl_client::texfilter::LOD_BIAS);
-    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows, material_detail: s.material_detail, water: s.water_effects };
+    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows, material_detail: s.material_detail, water: s.water_effects, plants: s.plant_effects };
     // NATIVE (this fork, decisions/0015): the textures prepared from now on
     // (the next level's) get detail maps; the shader switch above shows or
     // hides the ones made.
     gdl_client::material_maps::set_enabled(s.material_detail);
     gdl_client::material_maps::set_water(s.water_effects);
+    gdl_client::material_maps::set_plants(s.plant_effects);
     let now = (sharp, s.sharpen, enhance);
     // Before the first change everything is the original presentation.
     let was = last.unwrap_or((false, 0, gdl_client::Enhance::default()));
@@ -12003,6 +12004,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // textures loaded, with the pack's materials.tsv.
     gdl_client::material_maps::set_enabled(settings.material_detail);
     gdl_client::material_maps::set_water(settings.water_effects);
+    gdl_client::material_maps::set_plants(settings.plant_effects);
     gdl_client::material_maps::load_table(gdl_client::texture_pack::pack_dir().as_deref());
     // A complete HD texture pack is in use from the start, front end
     // included (hd_textures_job generates a missing one).

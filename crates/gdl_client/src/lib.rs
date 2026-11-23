@@ -185,10 +185,11 @@ impl Plugin for GsMaterialPlugin {
 /// at most 8 slots (gdl_play present_point_lights); NATIVE ENHANCEMENT
 /// "more lights" all 32. NATIVE (this fork, material_maps): then the
 /// level's sun direction for material detail (write_sun) and the water's
-/// clock and sky colour (write_water_clock, write_sky; decisions/0016).
+/// clock and sky colour (write_water_clock, write_sky; decisions/0016),
+/// and more switches (enhance3; write_enhance).
 static POINT_LIGHTS: std::sync::OnceLock<Buffer> = std::sync::OnceLock::new();
 pub const MAX_POINT_LIGHTS: usize = 32;
-pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 64;
+pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 80;
 
 /// The shared point-light buffer (GsMaterialPlugin::finish creates it).
 pub fn point_light_buffer() -> Buffer {
@@ -230,6 +231,9 @@ pub struct Enhance {
     /// NATIVE (this fork, decisions/0016): water surfaces get the water
     /// shading.
     pub water: bool,
+    /// NATIVE (this fork, decisions/0017): plants sway and let light
+    /// through.
+    pub plants: bool,
 }
 
 /// Write the enhancement switches after the point lights.
@@ -243,6 +247,10 @@ pub fn write_enhance(queue: &RenderQueue, e: Enhance) {
     let v = [b(e.sharp), b(e.full_colour), b(e.smooth_lightmaps), if e.sharp { e.lod_bias } else { 0.0 }, b(e.shadows), b(e.material_detail), b(e.water), debug_ao];
     let bytes: Vec<u8> = v.iter().flat_map(|c| c.to_le_bytes()).collect();
     queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32, &bytes);
+    // enhance3 (after the sun and the water): x plant effects.
+    let v3 = [b(e.plants), 0.0, 0.0, 0.0];
+    let bytes: Vec<u8> = v3.iter().flat_map(|c| c.to_le_bytes()).collect();
+    queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32 + 64, &bytes);
 }
 
 /// NATIVE (this fork, material_maps): the level's light for material
@@ -975,7 +983,7 @@ pub fn materials_for(
             let special = candidates.first().filter(|_| material_maps::typing()).map_or(0.0, |c| {
                 let kind = material_maps::guess(&c.label);
                 material_maps::report("-", &c.label, kind, true, "-");
-                material_maps::special(kind)
+                material_maps::special(kind, None)
             });
             // A magenta placeholder image: texture modifiers (MBSetRomTexture /
             // MBCopyTexture) may later copy a decoded frame into this record.
@@ -1032,7 +1040,7 @@ pub fn materials_for(
                     tint: Vec4::ONE,
                     options: Vec4::new(1.0, 0.0, 0.0, 0.0),
                     extra: Vec4::new(0.0, 0.0, 0.0, frame_writes()),
-                    depth: Vec4::new(0.0, detailed, surface.map_or(0.0, material_maps::special), 0.0),
+                    depth: Vec4::new(0.0, detailed, surface.map_or(0.0, |k| material_maps::special(k, Some(class))), 0.0),
                     ..default()
                 },
                 lit: false,

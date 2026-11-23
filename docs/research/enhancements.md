@@ -41,6 +41,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | hd_textures | false | false | the generated 4× texture pack; turning it on generates the pack once; outside the presets, Original turns it off |
 | material_detail | true | false | NATIVE (this fork): bump and shine maps on the opaque and cut-out textures, lit by the point, torch and level lights; made as a level loads (Material detail, below) |
 | water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
+| plant_effects | true | false | NATIVE (this fork): leaves, moss and grass sway; point lights shine through leaves; marked as a level loads (Plant effects, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -658,6 +659,22 @@ decisions/0016-water.md; models-plan.md M2.
 - **The clock.** It follows the updates and stops with the game.
 - **Measured.** Off, frames are pixel-identical. In C1 at 2560×1440 it
   costs up to 0.4 ms.
+- **Since 2026-11-22** (decisions/0017): the ripples are in game units,
+  not UV space. G1's swamp texture spans a large area, and its glints had
+  been white blotches.
+
+### Plant effects (this fork, 2026-11-22)
+
+decisions/0017-plants.md; models-plan.md M3.
+- **Marking.** Foliage (GsParams depth.z 2) and cut-out or see-through
+  grass (3) are marked at load. G1's plants are mostly see-through: moss,
+  grass tufts, vines, corn.
+- **Sway.** The plants sway by their texture: the UVs move, so cut-out
+  outlines move and the geometry stays, with a wave along the leaf and a
+  slow travelling gust.
+- **Light.** Point lights behind a leaf shine through it at 0.6.
+- **Soft edges.** Softer cut-out edges (alpha to coverage) wait: they need
+  MSAA, which ambient occlusion turns off.
 
 ## Settings overlay and keys
 

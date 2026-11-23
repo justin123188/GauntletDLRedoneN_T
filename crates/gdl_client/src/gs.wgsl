@@ -56,6 +56,7 @@ struct GsParams {
 // light for material detail, xyz towards it (render space), w its
 // strength (0: none). water: x the water's clock in seconds (it stops with
 // the game), yzw the colour water reflects (the level's light colour).
+// enhance3: x plant effects (decisions/0017).
 struct PointLights {
     pos: array<vec4<f32>, 32>,
     col: array<vec4<f32>, 32>,
@@ -63,6 +64,7 @@ struct PointLights {
     enhance2: vec4<f32>,
     sun: vec4<f32>,
     water: vec4<f32>,
+    enhance3: vec4<f32>,
 };
 
 #ifdef BINDLESS
@@ -153,6 +155,57 @@ fn pl_water(pl: u32) -> vec4<f32> {
 #endif
 }
 
+fn pl_enhance3(pl: u32) -> vec4<f32> {
+#ifdef BINDLESS
+    return plights_array[pl].enhance3;
+#else
+    return plights.enhance3;
+#endif
+}
+
+// NATIVE (this fork, decisions/0017): plants. They sway by their texture:
+// the UVs move, so a cut-out's outline moves with it and the geometry
+// stays. A wave along the leaf (v) makes it bend rather than slide; a slow
+// gust travels across the level. `amount` in UV units. NATIVE values, by
+// eye.
+fn plant_sway(uv: vec2<f32>, p: vec3<f32>, t: f32, amount: f32) -> vec2<f32> {
+    let phase = dot(p.xz, vec2(0.31, 0.17));
+    let gust = 0.65 + 0.35 * sin(t * 0.55 - phase * 0.4);
+    let w = sin(t * 1.9 + phase + uv.y * 5.0) + 0.45 * sin(t * 3.3 + phase * 1.7 + uv.y * 9.0);
+    return vec2(w, 0.3 * w) * (amount * gust);
+}
+
+// Foliage sways more than grass and moss; light from behind a leaf comes
+// through at this share.
+const FOLIAGE_SWAY: f32 = 0.012;
+const GRASS_SWAY: f32 = 0.007;
+const PLANT_BACK: f32 = 0.6;
+
+// point_lights for plants: a light behind the leaf shines through it
+// (PLANT_BACK of its light, coloured by the leaf's texture).
+fn plant_point_lights(pl: u32, n: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+    var sum = vec3(0.0);
+    for (var i = 0u; i < 32u; i = i + 1u) {
+        let lp = pl_pos(pl, i);
+        if lp.w <= 0.0 {
+            break;
+        }
+        let v = lp.xyz - p;
+        let d = max(length(v), 0.001);
+        let fall = 1.0 - (d * d) / (lp.w * lp.w);
+        var cos_t = dot(n, v / d);
+        if cos_t < 0.0 {
+            cos_t = -cos_t * PLANT_BACK;
+        }
+        if fall > 0.0 && cos_t > 0.0 {
+            let c = pl_col(pl, i);
+            let k = min(7.5 * c.a * fall * cos_t / d, 1.0);
+            sum = sum + c.rgb * k;
+        }
+    }
+    return sum;
+}
+
 // NATIVE (this fork, material_maps.rs): material detail. The detail map's
 // normal (tangent space, OpenGL convention: green towards the image's
 // top, −v) on the surface. The tangent frame comes from the screen-space
@@ -197,45 +250,69 @@ fn uv_frame(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: v
 }
 
 // NATIVE (this fork, decisions/0016): water. Ripples are travelling
-// waves in UV space (one repeat of the water texture is one unit), so they
-// flow with the texture's own scroll; a slow warp breaks their
-// regularity. Each wave: direction, cycles per unit, speed (radians per
-// second), slope. NATIVE values, by eye.
-fn ripple(uv: vec2<f32>, d: vec2<f32>, cycles: f32, speed: f32, slope: f32, t: f32) -> vec2<f32> {
-    return d * (slope * cos(dot(uv, d) * cycles * 6.2831853 - t * speed));
+// waves over the level's ground plane (render-space x and z, game units:
+// the same size in every level; the water texture's own scroll still
+// shows the flow), with a slow warp against their regularity. Each wave:
+// direction, cycles per unit, speed (radians per second), slope. They tilt
+// level water; steep water (falls) keeps its normal. NATIVE values, by
+// eye. (Until 2026-11-22 the waves were in UV space: G1's swamp texture
+// spans a large area per repeat, so its ripples, and their glints, came
+// out huge — white blotches.)
+fn ripple(q: vec2<f32>, d: vec2<f32>, cycles: f32, speed: f32, slope: f32, t: f32) -> vec2<f32> {
+    return d * (slope * cos(dot(q, d) * cycles * 6.2831853 - t * speed));
 }
 
-fn ripple_slope(uv: vec2<f32>, t: f32) -> vec2<f32> {
-    let w = uv + 0.05 * vec2(sin(uv.y * 9.0 + t * 0.6), sin(uv.x * 7.0 - t * 0.5));
-    var s = ripple(w, vec2(0.96, 0.28), 3.0, 1.1, 0.17, t);
-    s = s + ripple(w, vec2(-0.42, 0.91), 4.7, 1.5, 0.15, t);
-    s = s + ripple(w, vec2(0.62, -0.78), 7.3, 2.0, 0.12, t);
-    s = s + ripple(w, vec2(-0.85, -0.53), 11.1, 2.6, 0.10, t);
-    s = s + ripple(w, vec2(0.13, 0.99), 17.9, 3.4, 0.07, t);
+fn ripple_slope(q0: vec2<f32>, t: f32) -> vec2<f32> {
+    let q = q0 + 0.25 * vec2(sin(q0.y * 1.3 + t * 0.6), sin(q0.x * 1.1 - t * 0.5));
+    var s = ripple(q, vec2(0.96, 0.28), 0.38, 1.1, 0.17, t);
+    s = s + ripple(q, vec2(-0.42, 0.91), 0.59, 1.5, 0.15, t);
+    s = s + ripple(q, vec2(0.62, -0.78), 0.91, 2.0, 0.12, t);
+    s = s + ripple(q, vec2(-0.85, -0.53), 1.39, 2.6, 0.10, t);
+    s = s + ripple(q, vec2(0.13, 0.99), 2.2, 3.4, 0.07, t);
     return s;
 }
 
-fn ripple_normal(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>, s: vec2<f32>) -> vec3<f32> {
-    let f = uv_frame(n, dp1, dp2, du1, du2);
-    if !f.ok {
-        return n;
+// Finer ripples for the glints only: many small sparkles rather than a
+// few broad patches.
+fn glint_slope(q: vec2<f32>, t: f32) -> vec2<f32> {
+    var s = ripple(q, vec2(0.71, 0.70), 3.3, 4.1, 0.07, t);
+    s = s + ripple(q, vec2(-0.97, 0.24), 5.1, 5.3, 0.06, t);
+    s = s + ripple(q, vec2(0.29, -0.96), 7.7, 6.2, 0.05, t);
+    return s;
+}
+
+// The ripples' world slope `s` (∂h/∂x, ∂h/∂z) on the surface normal.
+fn ripple_normal(n: vec3<f32>, s: vec2<f32>) -> vec3<f32> {
+    return normalize(n - vec3(s.x, 0.0, s.y) * abs(n.y));
+}
+
+// Game units per UV unit along u and v (1 where the UVs are degenerate).
+fn uv_scale(dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>) -> vec2<f32> {
+    let det = du1.x * du2.y - du1.y * du2.x;
+    if abs(det) < 1e-14 {
+        return vec2(1.0);
     }
-    return normalize(n - f.t * s.x - f.b * s.y);
+    let pu = (dp1 * du2.y - dp2 * du1.y) / det;
+    let pv = (dp2 * du1.x - dp1 * du2.x) / det;
+    return vec2(max(length(pu), 1e-4), max(length(pv), 1e-4));
 }
 
 // Water: its roughness (sharp glints), the level light's glints, how much
 // the ripples shade the baked light, a stylised reflectance (F0 + (1 −
-// F0)(1 − n·v)³: the game camera looks down steeply, where water's real
-// Fresnel term reflects almost nothing), the sheen's strength, and at the
+// F0)(1 − n·v)⁴ with F0 0: only low angles, the far banks, reflect; a
+// constant part greyed G1's near-black swamp, brightly lit), the sheen's strength, and at the
 // shore of a translucent water the depth over which its edge fades and
 // the width of a faint foam line (game units).
-const WATER_ROUGH: f32 = 0.3;
-// How far the ripples bend the water texture (UV units per unit of slope):
-// its own animated pattern wobbles and flows.
-const WATER_WOBBLE: f32 = 0.012;
-const WATER_GLINT: f32 = 1.0;
+const WATER_ROUGH: f32 = 0.06;
+// How far the ripples bend the water texture (game units per unit of
+// slope): its own animated pattern wobbles and flows.
+const WATER_WOBBLE: f32 = 0.08;
+// The most the glints add (a highlight saturating over a broad ripple
+// read as a white patch).
+const WATER_GLINT_MAX: f32 = 0.3;
+const WATER_GLINT: f32 = 0.5;
 const WATER_SHADE: f32 = 2.0;
-const WATER_F0: f32 = 0.04;
+const WATER_F0: f32 = 0.0;
 const WATER_SHEEN: f32 = 1.0;
 const SHORE_SOFT: f32 = 0.2;
 const SHORE_FOAM: f32 = 0.6;
@@ -308,7 +385,7 @@ struct DetailLights {
 // point_lights on the surface (`n_geo`, as the original), its bumps
 // (`t`, the detail normal's tilt) shading each light around that, and
 // the highlights on the detail normal `n`.
-fn detail_point_lights(pl: u32, n: vec3<f32>, n_geo: vec3<f32>, t: vec3<f32>, p: vec3<f32>, v: vec3<f32>, sc: vec2<f32>) -> DetailLights {
+fn detail_point_lights(pl: u32, n: vec3<f32>, n_geo: vec3<f32>, t: vec3<f32>, p: vec3<f32>, v: vec3<f32>, sc: vec2<f32>, back: f32) -> DetailLights {
     var out = DetailLights(vec3(0.0), vec3(0.0));
     for (var i = 0u; i < 32u; i = i + 1u) {
         let lp = pl_pos(pl, i);
@@ -319,7 +396,11 @@ fn detail_point_lights(pl: u32, n: vec3<f32>, n_geo: vec3<f32>, t: vec3<f32>, p:
         let d = max(length(lv), 0.001);
         let fall = 1.0 - (d * d) / (lp.w * lp.w);
         let l = lv / d;
-        let cos_t = dot(n_geo, l);
+        var cos_t = dot(n_geo, l);
+        // A plant's light from behind (`back`: PLANT_BACK; 0 for others).
+        if cos_t < 0.0 {
+            cos_t = -cos_t * back;
+        }
         if fall > 0.0 && cos_t > 0.0 {
             let c = pl_col(pl, i);
             let a = 7.5 * c.a * fall / d;
@@ -520,7 +601,8 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     var n = n_geo;
     var detailed = false;
     var water = false;
-    // The water texture's offset by the ripples.
+    var plant = false;
+    // The texture's offset by the water's ripples or a plant's sway.
     var wobble = vec2(0.0);
     var rough = 1.0;
     var metal = 0.0;
@@ -532,6 +614,13 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             duv = duv * params.uv_xform.xz + params.uv_xform.yw;
         }
         duv = duv + params.options.zw;
+        // NATIVE (this fork, decisions/0017): a plant's sway (depth.z 2
+        // foliage, 3 grass), while plant effects are on (enhance3.x).
+        if pl_enhance3(pl).x > 0.5 && params.depth.z > 1.5 && params.extra.y < 0.5 && -0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
+            plant = true;
+            wobble = plant_sway(duv, in.world_position.xyz, pl_water(pl).x, select(FOLIAGE_SWAY, GRASS_SWAY, params.depth.z > 2.5));
+            duv = duv + wobble;
+        }
         // Sampled and differentiated in uniform control flow.
 #ifdef BINDLESS
         let dm = textureSampleBias(bindless_textures_2d[material_indices[slot].detail_texture], bindless_samplers_filtering[material_indices[slot].detail_sampler], duv, enhance.w);
@@ -552,12 +641,18 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         // (enhance2.z) for a water surface (depth.z): ripples on the
         // surface normal, lit as material detail with sharp glints; the
         // sheen and the soft shore below.
-        if pl_enhance2(pl).z > 0.5 && params.depth.z > 0.5 && params.extra.y < 0.5 && -0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
+        if pl_enhance2(pl).z > 0.5 && abs(params.depth.z - 1.0) < 0.5 && params.extra.y < 0.5 && -0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
             water = true;
             detailed = true;
-            let rs = ripple_slope(duv, pl_water(pl).x);
-            n = ripple_normal(n_geo, dp1, dp2, du1, du2, rs);
-            wobble = rs * WATER_WOBBLE;
+            let rs = ripple_slope(in.world_position.xz, pl_water(pl).x);
+            n = ripple_normal(n_geo, rs + glint_slope(in.world_position.xz, pl_water(pl).x));
+            // The texture's offset: the world offset along the UV
+            // directions, over the game units per UV unit.
+            let f = uv_frame(n_geo, dp1, dp2, du1, du2);
+            if f.ok {
+                let o = vec3(rs.x, 0.0, rs.y) * (WATER_WOBBLE * abs(n_geo.y));
+                wobble = vec2(dot(o, f.t), dot(o, f.b)) / uv_scale(dp1, dp2, du1, du2);
+            }
             rough = WATER_ROUGH;
             metal = 0.0;
         }
@@ -593,13 +688,15 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         var lights = vec3(0.0);
         if detailed {
             let sc = spec_consts(rough);
-            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc);
+            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc, select(0.0, PLANT_BACK, plant));
             lights = dl.diffuse;
             spec = dl.specular;
             let dn = dot(n, params.light_dir.xyz);
             if 0.0 < d && 0.0 < dn {
                 spec = spec + params.light.rgb * dn * highlight(n, params.light_dir.xyz, to_eye, sc);
             }
+        } else if plant {
+            lights = plant_point_lights(pl, n, in.world_position.xyz);
         } else {
             lights = point_lights(pl, n, in.world_position.xyz);
         }
@@ -614,7 +711,7 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         if detailed {
             let t_n = tilt(n, n_geo);
             let sc = spec_consts(rough);
-            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc);
+            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc, select(0.0, PLANT_BACK, plant));
             lights = dl.diffuse;
             spec = dl.specular;
             let sun = pl_sun(pl);
@@ -623,6 +720,8 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
                 spec = spec + base * (sun.w * select(SUN_SPEC, WATER_GLINT, water) * d * highlight(n, sun.xyz, to_eye, sc));
             }
             base = base * bump_shade(pl, t_n, select(BUMP_SHADE, WATER_SHADE, water));
+        } else if plant {
+            lights = plant_point_lights(pl, n, in.world_position.xyz);
         } else if params.light_dir.w > -0.5 {
             lights = point_lights(pl, n, in.world_position.xyz);
         }
@@ -671,6 +770,9 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         rgb = gs_modulate(rgb, t.rgb, full);
         alpha = alpha * t.a * (255.0 / 128.0);
     }
+    if water {
+        spec = min(spec, vec3(WATER_GLINT_MAX));
+    }
     if detailed {
         rgb = rgb + spec * mix(vec3(1.0), t.rgb, metal);
     }
@@ -678,10 +780,9 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     // rippled normal, times the baked light there.
     if water {
         let ndv = clamp(dot(n, to_eye), 0.0, 1.0);
-        let fr = WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - ndv, 3.0);
-        // The baked light there (at least a little: a water's vertex
-        // colours may hold its tint as much as its light).
-        let lum = clamp(dot(cf, vec3(0.299, 0.587, 0.114)), 0.3, 1.0);
+        let fr = WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - ndv, 4.0);
+        // The baked light there: dark water (G1's swamp) stays dark.
+        let lum = clamp(dot(cf, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
         rgb = rgb + pl_water(pl).yzw * (fr * WATER_SHEEN * lum);
     }
 #endif

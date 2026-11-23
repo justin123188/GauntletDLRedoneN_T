@@ -89,6 +89,13 @@ APPDATA, GDL_NO_GAMEPADS):
 - **The owner's playtest.** 2026-11-22, the build of 7eac8f0, in motion:
   "Looks good".
 
+**Changed after that playtest** (decisions/0017, "A water fix"). G1's
+shallow, near-black swamp showed big white blotches:
+- The ripples are now in game units over the ground plane, not in UV
+  space.
+- The glints come from finer waves, sharper and capped.
+- The sheen is (1 − n·v)⁴, with no constant part.
+
 Not done:
 - replacement water meshes with real waves (M2's W2);
 - reflections of the scene;

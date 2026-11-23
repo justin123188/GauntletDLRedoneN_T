@@ -165,7 +165,7 @@ const WORDS: &[(Kind, &[&str])] = &[
         Kind::Foliage,
         &[
             "LEAF", "LEAVES", "^TREE", "^BUSH", "PLANT", "^FERN", "^VINE", "IVY", "WEED", "FLOWER", "HEDGE", "SHRUB", "BRANCH", "FOLIAGE", "^PALM",
-            "^REED", "CACTUS", "^PINE", "OAK", "FROND", "GROWTH",
+            "^REED", "CACTUS", "=PINE", "PINETREE", "PINECONE", "OAK", "FROND", "GROWTH", "CORN", "STALK", "WILLOW", "CYPRESS",
         ],
     ),
     (
@@ -176,7 +176,7 @@ const WORDS: &[(Kind, &[&str])] = &[
             "CRYPT", "RUIN", "WALL", "FLOOR", "FOUNT", "ROOF", "SHINGLE", "GATEPOST", "RAILING",
         ],
     ),
-    (Kind::Grass, &["GRASS", "LAWN", "MOSS", "TURF", "MEADOW", "=HAY", "HAYPILE", "STRAW"]),
+    (Kind::Grass, &["GRASS", "LAWN", "MOSS", "TURF", "MEADOW", "=HAY", "HAYPILE", "HAYSTACK", "STRAW"]),
     (Kind::Ground, &["DIRT", "MUD", "^SAND", "GROUND", "EARTH", "^PATH", "^ROAD", "SOIL", "GRAVEL", "ASH", "SNOW"]),
     (
         Kind::Cloth,
@@ -404,16 +404,36 @@ pub fn water() -> bool {
     WATER.load(Ordering::Relaxed)
 }
 
-/// Whether textures prepared now get a surface type (material detail or
-/// water effects).
-pub fn typing() -> bool {
-    enabled() || water()
+static PLANTS: AtomicBool = AtomicBool::new(false);
+
+/// NATIVE (this fork, decisions/0017): whether the textures prepared from
+/// now on mark plants for gs.wgsl's sway and light through leaves
+/// (Settings::plant_effects; the next level's).
+pub fn set_plants(on: bool) {
+    PLANTS.store(on, Ordering::Relaxed);
 }
 
-/// GsParams depth.z of a surface type: 1 water (while water effects are
-/// on), else 0.
-pub fn special(kind: Kind) -> f32 {
-    if kind == Kind::Water && water() { 1.0 } else { 0.0 }
+pub fn plants() -> bool {
+    PLANTS.load(Ordering::Relaxed)
+}
+
+/// Whether textures prepared now get a surface type (material detail,
+/// water or plant effects).
+pub fn typing() -> bool {
+    enabled() || water() || plants()
+}
+
+/// GsParams depth.z of a surface type and alpha class (None: a texture
+/// modifier's target, taken as see-through): 1 water (while water effects
+/// are on); 2 foliage and 3 cut-out or see-through grass (while plant
+/// effects are on: grass ground and hay bales stay still); else 0.
+pub fn special(kind: Kind, class: Option<u8>) -> f32 {
+    match kind {
+        Kind::Water if water() => 1.0,
+        Kind::Foliage if plants() => 2.0,
+        Kind::Grass if plants() && class != Some(0) => 3.0,
+        _ => 0.0,
+    }
 }
 
 /// A texture's detail map.
@@ -676,6 +696,12 @@ mod tests {
             ("YEL_SOR_THIGH", Kind::Skin),
             ("INFERNO", Kind::Auto),
             ("BASIC_WALL_WATEREDGE", Kind::Stone),
+            // G1's plants (2026-11-22).
+            ("CORN_SIDE", Kind::Foliage),
+            ("MOSS_BRANCH", Kind::Foliage),
+            ("GRASS_TUFFS", Kind::Grass),
+            ("HAYSTACK_01", Kind::Grass),
+            ("SKEL2_SPINE", Kind::Auto),
             ("SWATER23", Kind::Water),
             ("GEMSTONES-NA", Kind::Gem),
             ("PINK_GEM", Kind::Gem),
@@ -683,6 +709,24 @@ mod tests {
         ] {
             assert_eq!(guess(label), kind, "{label}");
         }
+    }
+
+    /// Water, foliage and see-through grass are marked for their shading;
+    /// grass ground (opaque) stays still.
+    #[test]
+    fn special_surfaces_follow_their_switches() {
+        set_water(true);
+        set_plants(true);
+        assert_eq!(special(Kind::Water, Some(2)), 1.0);
+        assert_eq!(special(Kind::Foliage, Some(0)), 2.0);
+        assert_eq!(special(Kind::Grass, Some(2)), 3.0);
+        assert_eq!(special(Kind::Grass, None), 3.0);
+        assert_eq!(special(Kind::Grass, Some(0)), 0.0);
+        assert_eq!(special(Kind::Stone, Some(0)), 0.0);
+        set_water(false);
+        set_plants(false);
+        assert_eq!(special(Kind::Water, Some(2)), 0.0);
+        assert_eq!(special(Kind::Foliage, Some(1)), 0.0);
     }
 
     #[test]
