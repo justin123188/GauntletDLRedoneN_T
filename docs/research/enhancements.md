@@ -383,7 +383,9 @@ playtest, 2026-10-31) and off in the original presentation.
   class (red unlit, green lightmapped, blue VU1-lit) × the occlusion.
 - SMAA (Settings::smaa; "Anti-aliasing: Off / 2x / 4x MSAA / SMAA"): Bevy's
   SMAA on the 3D view. Polygon edges as smooth as 4× MSAA in G1; cut-out
-  edges (the spearmen's tridents) slightly more stepped.
+  edges (the spearmen's tridents) slightly more stepped. Sharpening runs
+  after it (this fork, decisions/0020): Bevy 0.18.1 left the two passes
+  unordered, and their order changed from run to run.
 - Bloom (Settings::bloom): Bevy's bloom on the 3D view, additive,
   intensity 0.25, prefilter threshold 1.0 (softness 0.3), mip chain from
   256 (Bevy's default 512: the same look, fewer passes; NATIVE values by

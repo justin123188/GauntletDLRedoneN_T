@@ -181,7 +181,7 @@ From `gdl_play.rs` and `docs/research/*.md`; all are environment variables.
 | `GDL_SHOT_FRAMES=N,M,…` with `GDL_SHOT_DIR=DIR` | Saves rendered frames as PNG. Use it to look at results yourself. |
 | `GDL_INPUT_SCRIPT` | Scripted pad input on port 0, as JSON `[first, last, [entries]]`. |
 | `GDL_EXIT_AFTER=N` with `GDL_STATE_OUT` | Writes the sim-state SHA-256 after N updates, then exits. |
-| `GDL_FREEZE_AT=N` | Freezes the sim and keeps rendering, for A/B renderer captures. |
+| `GDL_FREEZE_AT=N` | Freezes the sim and keeps rendering, for A/B renderer captures. Use settings with `"interpolate": false`: with interpolation on, a frozen frame still moves slightly (decisions/0020). |
 | `GDL_BASELINE=1` | The original presentation and camera; never writes the player's settings. |
 | `GDL_SETTINGS=FILE` | Uses another settings file without writing the player's. |
 | `GDL_NO_AUDIO` | No audio output. |
@@ -300,6 +300,10 @@ later. And effects look better mostly through their textures.
      Potions glow in their bottle's colour; with no pickup sparkle of
      their own, they flare from the pickup for 0.75 s (the owner's
      playtest: one second was a little long).
+   - Frames the same from run to run: fixed 2026-11-23 (decisions/0020).
+     With ambient occlusion and sharpening on, Bevy ran SMAA and
+     sharpening in either order; SMAA now runs first. Comparisons of
+     frozen frames are exact again.
    - Next: the model phase's M4, the Blender exporter (offered; the owner
      asked for the potion glow first).
    - Export the originals to glTF with skeletons; there is a scene glTF
@@ -364,6 +368,11 @@ memory. The port stays the base.
       needs a look in play.
 - [ ] Potion glow (decisions/0019): the owner's playtest 2026-11-22
       asked for a shorter flare, now 0.75 s; that build's playtest next.
+- [x] Frames that varied from run to run (decisions/0020): fixed
+      2026-11-23, SMAA before sharpening.
+- [ ] Interpolation while the simulation waits (research/unknowns.md):
+      a hypothesis that what moved can shake while a scroll's message box
+      is up; look at it in play.
 - [x] Gem glow (decisions/0018): the owner's playtest 2026-11-22, "Looks
       good".
 - [x] Plant effects (decisions/0017): the owner's playtest 2026-11-22.

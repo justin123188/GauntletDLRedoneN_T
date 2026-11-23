@@ -90,7 +90,8 @@ APPDATA, GDL_NO_GAMEPADS):
   builds gave a 14174-pixel variant (small differences on edges and
   characters, nothing moved) in three runs and the 5b4d6b9 frame exactly in
   two; 5b4d6b9 and the earlier backups gave the 5b4d6b9 frame in each run.
-  Within a run, frames 1500..3500 after the freeze are the same. The
-  cause is not found yet.
+  Within a run, frames 1500..3500 after the freeze are the same. Found
+  and fixed 2026-11-23: the order of SMAA and sharpening
+  (decisions/0020).
 - **The owner's playtest:** of the 1 s flare, shorter (above); of the
   0.75 s flare, next.

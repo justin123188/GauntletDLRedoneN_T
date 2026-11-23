@@ -12482,11 +12482,13 @@ fn run() -> Result<(), Box<dyn Error>> {
             // machine's physical controllers.
             if std::env::var_os("GDL_NO_GAMEPADS").is_some() { plugins.disable::<bevy::gilrs::GilrsPlugin>() } else { plugins }
         })
-        // CAS orders its node after FXAA's (inactive without its component).
+        // CAS orders its node after FXAA's (inactive without its component);
+        // PostProcessOrder after SMAA's.
         .add_plugins((
             bevy::anti_alias::fxaa::FxaaPlugin,
             bevy::anti_alias::contrast_adaptive_sharpening::CasPlugin,
             bevy::anti_alias::smaa::SmaaPlugin,
+            PostProcessOrder,
             bevy::post_process::bloom::BloomPlugin,
             gdl_client::writeback::MsaaWritebackPlugin,
         ))
@@ -12927,6 +12929,25 @@ fn fatal_text(info: &std::panic::PanicHookInfo) -> String {
         )
     } else {
         format!("The game stopped unexpectedly:\n{info}")
+    }
+}
+
+/// NATIVE ENHANCEMENTS (this fork, decisions/0020): the 3D camera's
+/// sharpening runs after its SMAA, as after FXAA. Bevy 0.18.1 orders both
+/// after tonemapping and neither after the other, and its graph runner
+/// takes such nodes in the order of a hash map keyed by the labels'
+/// addresses, which change from run to run: with ambient occlusion (whose
+/// anti-aliasing is SMAA) and sharpening on, a frame came out in one of two
+/// states (research/unknowns.md "Frozen frames in two states"). Neither is
+/// active in the original presentation.
+struct PostProcessOrder;
+
+impl Plugin for PostProcessOrder {
+    fn build(&self, app: &mut App) {
+        use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+        use bevy::render::render_graph::RenderGraphExt;
+        let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) else { return };
+        render_app.add_render_graph_edge(Core3d, Node3d::Smaa, Node3d::ContrastAdaptiveSharpening);
     }
 }
 
