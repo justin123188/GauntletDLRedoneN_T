@@ -52,14 +52,17 @@ struct GsParams {
 // y full colour precision, z smooth lightmaps, w the sharp filter's
 // level-of-detail bias; enhance2: x character shadows (gdl_play's
 // shadow-casting directional light, the first), y material detail (this
-// fork, material_maps.rs). sun: the level's light for material detail,
-// xyz towards it (render space), w its strength (0: none).
+// fork, material_maps.rs), z water (decisions/0016). sun: the level's
+// light for material detail, xyz towards it (render space), w its
+// strength (0: none). water: x the water's clock in seconds (it stops with
+// the game), yzw the colour water reflects (the level's light colour).
 struct PointLights {
     pos: array<vec4<f32>, 32>,
     col: array<vec4<f32>, 32>,
     enhance: vec4<f32>,
     enhance2: vec4<f32>,
     sun: vec4<f32>,
+    water: vec4<f32>,
 };
 
 #ifdef BINDLESS
@@ -142,6 +145,14 @@ fn pl_sun(pl: u32) -> vec4<f32> {
 #endif
 }
 
+fn pl_water(pl: u32) -> vec4<f32> {
+#ifdef BINDLESS
+    return plights_array[pl].water;
+#else
+    return plights.water;
+#endif
+}
+
 // NATIVE (this fork, material_maps.rs): material detail. The detail map's
 // normal (tangent space, OpenGL convention: green towards the image's
 // top, −v) on the surface. The tangent frame comes from the screen-space
@@ -149,9 +160,28 @@ fn pl_sun(pl: u32) -> vec4<f32> {
 // and B = ∂p/∂v solve dp = T du + B dv for both screen directions; the
 // determinant's sign keeps mirrored UVs and the mirrored render root right.
 fn detail_normal(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>, xy: vec2<f32>) -> vec3<f32> {
+    let f = uv_frame(n, dp1, dp2, du1, du2);
+    if !f.ok {
+        return n;
+    }
+    // A distant level's averaged normals are shorter: z rebuilt from them
+    // flattens the bumps.
+    let m = xy * 2.0 - 1.0;
+    let z = sqrt(max(1.0 - dot(m, m), 0.0));
+    return normalize(f.t * m.x - f.b * m.y + n * z);
+}
+
+// The unit directions of increasing u (t) and v (b) along the surface.
+struct UvFrame {
+    t: vec3<f32>,
+    b: vec3<f32>,
+    ok: bool,
+};
+
+fn uv_frame(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>) -> UvFrame {
     let det = du1.x * du2.y - du1.y * du2.x;
     if abs(det) < 1e-14 {
-        return n;
+        return UvFrame(n, n, false);
     }
     let s = sign(det);
     var t = (dp1 * du2.y - dp2 * du1.y) * s;
@@ -161,14 +191,55 @@ fn detail_normal(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, d
     let lt = length(t);
     let lb = length(b);
     if lt < 1e-12 || lb < 1e-12 {
+        return UvFrame(n, n, false);
+    }
+    return UvFrame(t / lt, b / lb, true);
+}
+
+// NATIVE (this fork, decisions/0016): water. Ripples are travelling
+// waves in UV space (one repeat of the water texture is one unit), so they
+// flow with the texture's own scroll; a slow warp breaks their
+// regularity. Each wave: direction, cycles per unit, speed (radians per
+// second), slope. NATIVE values, by eye.
+fn ripple(uv: vec2<f32>, d: vec2<f32>, cycles: f32, speed: f32, slope: f32, t: f32) -> vec2<f32> {
+    return d * (slope * cos(dot(uv, d) * cycles * 6.2831853 - t * speed));
+}
+
+fn ripple_slope(uv: vec2<f32>, t: f32) -> vec2<f32> {
+    let w = uv + 0.05 * vec2(sin(uv.y * 9.0 + t * 0.6), sin(uv.x * 7.0 - t * 0.5));
+    var s = ripple(w, vec2(0.96, 0.28), 3.0, 1.1, 0.17, t);
+    s = s + ripple(w, vec2(-0.42, 0.91), 4.7, 1.5, 0.15, t);
+    s = s + ripple(w, vec2(0.62, -0.78), 7.3, 2.0, 0.12, t);
+    s = s + ripple(w, vec2(-0.85, -0.53), 11.1, 2.6, 0.10, t);
+    s = s + ripple(w, vec2(0.13, 0.99), 17.9, 3.4, 0.07, t);
+    return s;
+}
+
+fn ripple_normal(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>, s: vec2<f32>) -> vec3<f32> {
+    let f = uv_frame(n, dp1, dp2, du1, du2);
+    if !f.ok {
         return n;
     }
-    // A distant level's averaged normals are shorter: z rebuilt from them
-    // flattens the bumps.
-    let m = xy * 2.0 - 1.0;
-    let z = sqrt(max(1.0 - dot(m, m), 0.0));
-    return normalize(t / lt * m.x - b / lb * m.y + n * z);
+    return normalize(n - f.t * s.x - f.b * s.y);
 }
+
+// Water: its roughness (sharp glints), the level light's glints, how much
+// the ripples shade the baked light, a stylised reflectance (F0 + (1 −
+// F0)(1 − n·v)³: the game camera looks down steeply, where water's real
+// Fresnel term reflects almost nothing), the sheen's strength, and at the
+// shore of a translucent water the depth over which its edge fades and
+// the width of a faint foam line (game units).
+const WATER_ROUGH: f32 = 0.3;
+// How far the ripples bend the water texture (UV units per unit of slope):
+// its own animated pattern wobbles and flows.
+const WATER_WOBBLE: f32 = 0.012;
+const WATER_GLINT: f32 = 1.0;
+const WATER_SHADE: f32 = 2.0;
+const WATER_F0: f32 = 0.04;
+const WATER_SHEEN: f32 = 1.0;
+const SHORE_SOFT: f32 = 0.2;
+const SHORE_FOAM: f32 = 0.6;
+const FOAM_STRENGTH: f32 = 0.35;
 
 // How much the bumps shade the baked light along the level's light
 // direction, how much they shade the live lights, and the highlights'
@@ -219,13 +290,14 @@ fn tilt(n: vec3<f32>, n_geo: vec3<f32>) -> vec3<f32> {
     return n - n_geo * dot(n, n_geo);
 }
 
-// The baked light's bump shading towards the level's light.
-fn bump_shade(pl: u32, t: vec3<f32>) -> f32 {
+// The baked light's bump shading towards the level's light, `k` its
+// strength (BUMP_SHADE; water WATER_SHADE).
+fn bump_shade(pl: u32, t: vec3<f32>, k: f32) -> f32 {
     let sun = pl_sun(pl);
     if sun.w <= 0.0 {
         return 1.0;
     }
-    return clamp(1.0 + BUMP_SHADE * sun.w * dot(t, sun.xyz), 0.55, 1.45);
+    return clamp(1.0 + k * sun.w * dot(t, sun.xyz), 0.55, 1.6);
 }
 
 struct DetailLights {
@@ -447,6 +519,9 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     let n_geo = normalize(in.world_normal);
     var n = n_geo;
     var detailed = false;
+    var water = false;
+    // The water texture's offset by the ripples.
+    var wobble = vec2(0.0);
     var rough = 1.0;
     var metal = 0.0;
 #ifdef VERTEX_UVS_A
@@ -472,6 +547,19 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             n = detail_normal(n_geo, dp1, dp2, du1, du2, dm.xy);
             rough = dm.z;
             metal = dm.w;
+        }
+        // NATIVE (this fork, decisions/0016): water, while it is on
+        // (enhance2.z) for a water surface (depth.z): ripples on the
+        // surface normal, lit as material detail with sharp glints; the
+        // sheen and the soft shore below.
+        if pl_enhance2(pl).z > 0.5 && params.depth.z > 0.5 && params.extra.y < 0.5 && -0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
+            water = true;
+            detailed = true;
+            let rs = ripple_slope(duv, pl_water(pl).x);
+            n = ripple_normal(n_geo, dp1, dp2, du1, du2, rs);
+            wobble = rs * WATER_WOBBLE;
+            rough = WATER_ROUGH;
+            metal = 0.0;
         }
     }
 #endif
@@ -532,9 +620,9 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             let sun = pl_sun(pl);
             let d = dot(n, sun.xyz);
             if 0.0 < sun.w && 0.0 < d {
-                spec = spec + base * (sun.w * SUN_SPEC * d * highlight(n, sun.xyz, to_eye, sc));
+                spec = spec + base * (sun.w * select(SUN_SPEC, WATER_GLINT, water) * d * highlight(n, sun.xyz, to_eye, sc));
             }
-            base = base * bump_shade(pl, t_n);
+            base = base * bump_shade(pl, t_n, select(BUMP_SHADE, WATER_SHADE, water));
         } else if params.light_dir.w > -0.5 {
             lights = point_lights(pl, n, in.world_position.xyz);
         }
@@ -547,7 +635,7 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     if params.extra.z > 0.5 {
         uv = uv * params.uv_xform.xz + params.uv_xform.yw;
     }
-    uv = uv + params.options.zw;
+    uv = uv + params.options.zw + wobble;
     if params.extra.y > 0.5 {
         let n = normalize(in.world_normal);
         // VU1 program A: t = N·axis (the ×7.5 normal encoding cancels the
@@ -585,6 +673,16 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     }
     if detailed {
         rgb = rgb + spec * mix(vec3(1.0), t.rgb, metal);
+    }
+    // Water's sheen: the reflected colour by Schlick's Fresnel on the
+    // rippled normal, times the baked light there.
+    if water {
+        let ndv = clamp(dot(n, to_eye), 0.0, 1.0);
+        let fr = WATER_F0 + (1.0 - WATER_F0) * pow(1.0 - ndv, 3.0);
+        // The baked light there (at least a little: a water's vertex
+        // colours may hold its tint as much as its light).
+        let lum = clamp(dot(cf, vec3(0.299, 0.587, 0.114)), 0.3, 1.0);
+        rgb = rgb + pl_water(pl).yzw * (fr * WATER_SHEEN * lum);
     }
 #endif
     rgb = min(rgb, vec3(1.0));
@@ -685,6 +783,24 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         rgb = select(select(vec3(ao), vec3(0.0, 0.0, 1.0), rel < -1e-3), vec3(1.0, 0.0, 0.0), 1e-3 < rel);
     }
 #endif
+#endif
+#endif
+    // NATIVE (this fork, decisions/0016): a translucent water's edge fades
+    // where the ground behind comes within SHORE_SOFT of its surface (the
+    // 3D camera's depth prepass, present while ambient occlusion is on; it
+    // holds the opaque parts only).
+#ifdef DEPTH_PREPASS
+#ifndef GS_OPAQUE
+    if water {
+        let near = view.clip_from_view[3][2];
+        let behind = near / max(prepass_utils::prepass_depth(in.position, 0u), 1e-9);
+        let here = near / max(in.position.z, 1e-9);
+        let deep = behind - here;
+        // The foam: brightest just off the edge, broken up by the ripples.
+        let foam = clamp(1.0 - deep / SHORE_FOAM, 0.0, 1.0) * (0.6 + 0.4 * dot(n, n_geo));
+        rgb = min(rgb + pl_water(pl).yzw * (FOAM_STRENGTH * foam * foam), vec3(1.0));
+        alpha = alpha * clamp(deep / SHORE_SOFT, 0.0, 1.0);
+    }
 #endif
 #endif
     // Av (0..255) must exceed AREF 1.

@@ -140,6 +140,8 @@ const WORDS: &[(Kind, &[&str])] = &[
             "VORTEX", "TORCH", "CANDLE", "LAMP", "^GAS", "FORCEFIELD", "SUN", "XRAY", "XLU", "TRANSITION", "SCORE", "POINTER",
         ],
     ),
+    // A wall at the water's edge (C1's BASIC_WALL_WATEREDGE) is stone.
+    (Kind::Stone, &["WATEREDGE"]),
     (Kind::Water, &["WATER", "WATR", "WAVE", "RAPID", "RIVER", "OCEAN", "FOAM", "RIPPLE", "POND", "LAKE", "SWAMP", "BOG"]),
     (Kind::Lava, &["LAVA", "MAGMA", "MOLTEN"]),
     (Kind::Gem, &["^GEM", "JEWEL", "RUBY", "EMERALD", "SAPPHIRE", "DIAMOND", "CRYSTAL", "AMETHYST", "TOPAZ", "PEARL", "^SHARD", "^OPAL"]),
@@ -380,13 +382,43 @@ const BUMP_SCALE: f32 = 4.0;
 /// The flat map (type none): draws as without detail.
 const FLAT: [u8; 4] = [128, 128, 255, 0];
 
-/// A texture's detail map. DEBUG GDL_DEBUG_MATERIALS=1: each texture's
-/// name, label, type and whether it was guessed, on stderr.
+/// DEBUG GDL_DEBUG_MATERIALS=1: each texture's name, label, type, whether
+/// it was guessed and its alpha class (0 opaque, 1 cut-out, 2 blended; "-"
+/// for a texture-modifier target without texels) on stderr.
+pub fn report(name: &str, label: &str, kind: Kind, guessed: bool, class: &str) {
+    if std::env::var_os("GDL_DEBUG_MATERIALS").is_some() {
+        eprintln!("MATERIAL {name} {label} {} {} {class}", kind.name(), if guessed { "guess" } else { "table" });
+    }
+}
+
+static WATER: AtomicBool = AtomicBool::new(false);
+
+/// NATIVE (this fork, decisions/0016): whether the textures prepared from
+/// now on mark water surfaces for gs.wgsl's water (Settings::water_effects;
+/// the next level's).
+pub fn set_water(on: bool) {
+    WATER.store(on, Ordering::Relaxed);
+}
+
+pub fn water() -> bool {
+    WATER.load(Ordering::Relaxed)
+}
+
+/// Whether textures prepared now get a surface type (material detail or
+/// water effects).
+pub fn typing() -> bool {
+    enabled() || water()
+}
+
+/// GsParams depth.z of a surface type: 1 water (while water effects are
+/// on), else 0.
+pub fn special(kind: Kind) -> f32 {
+    if kind == Kind::Water && water() { 1.0 } else { 0.0 }
+}
+
+/// A texture's detail map.
 pub fn make(src: &Source) -> Detail {
     let (line, guessed) = choose(src.name, src.label);
-    if std::env::var_os("GDL_DEBUG_MATERIALS").is_some() {
-        eprintln!("MATERIAL {} {} {} {}", src.name, src.label, line.kind.name(), if guessed { "guess" } else { "table" });
-    }
     let inputs = inputs(src.name);
     let kind = line.kind;
     let p = line.params();
@@ -643,6 +675,8 @@ mod tests {
             ("GW_HAT", Kind::Cloth),
             ("YEL_SOR_THIGH", Kind::Skin),
             ("INFERNO", Kind::Auto),
+            ("BASIC_WALL_WATEREDGE", Kind::Stone),
+            ("SWATER23", Kind::Water),
             ("GEMSTONES-NA", Kind::Gem),
             ("PINK_GEM", Kind::Gem),
             ("MOHANDGEM_GRE", Kind::Gem),

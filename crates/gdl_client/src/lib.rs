@@ -183,11 +183,12 @@ impl Plugin for GsMaterialPlugin {
 /// NATIVE ENHANCEMENT switches every material reads (write_enhance;
 /// gs.wgsl PointLights.enhance, enhance2). The original presentation fills
 /// at most 8 slots (gdl_play present_point_lights); NATIVE ENHANCEMENT
-/// "more lights" all 32. NATIVE (this fork, material_maps): last, the
-/// level's sun direction for material detail (write_sun).
+/// "more lights" all 32. NATIVE (this fork, material_maps): then the
+/// level's sun direction for material detail (write_sun) and the water's
+/// clock and sky colour (write_water_clock, write_sky; decisions/0016).
 static POINT_LIGHTS: std::sync::OnceLock<Buffer> = std::sync::OnceLock::new();
 pub const MAX_POINT_LIGHTS: usize = 32;
-pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 48;
+pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 64;
 
 /// The shared point-light buffer (GsMaterialPlugin::finish creates it).
 pub fn point_light_buffer() -> Buffer {
@@ -226,6 +227,9 @@ pub struct Enhance {
     pub shadows: bool,
     /// NATIVE (this fork, material_maps): the detail maps are drawn.
     pub material_detail: bool,
+    /// NATIVE (this fork, decisions/0016): water surfaces get the water
+    /// shading.
+    pub water: bool,
 }
 
 /// Write the enhancement switches after the point lights.
@@ -236,7 +240,7 @@ pub fn write_enhance(queue: &RenderQueue, e: Enhance) {
     // the prepass normal, depth against the prepass, depth bands, the
     // lighting class); a value that is not a number means 1.
     let debug_ao = std::env::var("GDL_DEBUG_AO").ok().map_or(0.0, |v| v.parse::<f32>().unwrap_or(1.0));
-    let v = [b(e.sharp), b(e.full_colour), b(e.smooth_lightmaps), if e.sharp { e.lod_bias } else { 0.0 }, b(e.shadows), b(e.material_detail), 0.0, debug_ao];
+    let v = [b(e.sharp), b(e.full_colour), b(e.smooth_lightmaps), if e.sharp { e.lod_bias } else { 0.0 }, b(e.shadows), b(e.material_detail), b(e.water), debug_ao];
     let bytes: Vec<u8> = v.iter().flat_map(|c| c.to_le_bytes()).collect();
     queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32, &bytes);
 }
@@ -248,6 +252,21 @@ pub fn write_sun(queue: &RenderQueue, sun: Vec4) {
     let Some(buffer) = POINT_LIGHTS.get() else { return };
     let bytes: Vec<u8> = sun.to_array().iter().flat_map(|c| c.to_le_bytes()).collect();
     queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32 + 32, &bytes);
+}
+
+/// NATIVE (this fork, decisions/0016): the water's clock in seconds
+/// (gs.wgsl PointLights.water.x; it stops with the game).
+pub fn write_water_clock(queue: &RenderQueue, seconds: f32) {
+    let Some(buffer) = POINT_LIGHTS.get() else { return };
+    queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32 + 48, &seconds.to_le_bytes());
+}
+
+/// NATIVE (this fork, decisions/0016): the colour water reflects
+/// (PointLights.water.yzw): the level's light colour.
+pub fn write_sky(queue: &RenderQueue, sky: Vec3) {
+    let Some(buffer) = POINT_LIGHTS.get() else { return };
+    let bytes: Vec<u8> = sky.to_array().iter().flat_map(|c| c.to_le_bytes()).collect();
+    queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32 + 52, &bytes);
 }
 
 /// The final pass of the last camera: the frame holds GS display values
@@ -948,8 +967,16 @@ pub fn materials_for(
         if candidates.len() == 1 {
             label_index.entry(candidates[0].label.to_uppercase()).or_insert(bitmap.index as u16);
         }
-        let Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, detail }) = decoded else {
+        let Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, surface, detail }) = decoded else {
             unresolved.push(bitmap.index);
+            // NATIVE (this fork, decisions/0016): a texture modifier's
+            // target (no texels: the frames' texels are copied in) takes the
+            // type its label suggests, so animated water is water.
+            let special = candidates.first().filter(|_| material_maps::typing()).map_or(0.0, |c| {
+                let kind = material_maps::guess(&c.label);
+                material_maps::report("-", &c.label, kind, true, "-");
+                material_maps::special(kind)
+            });
             // A magenta placeholder image: texture modifiers (MBSetRomTexture /
             // MBCopyTexture) may later copy a decoded frame into this record.
             let key = texfilter::TexKey { flags: bitmap.flags, levels: 1, animated: false, borrowed: false };
@@ -959,7 +986,7 @@ pub fn materials_for(
             base.insert(
                 bitmap.index as u16,
                 materials.add(GsMaterial {
-                    params: GsParams { tint: Vec4::ONE, options: Vec4::new(1.0, 0.0, 0.0, 0.0), ..default() },
+                    params: GsParams { tint: Vec4::ONE, options: Vec4::new(1.0, 0.0, 0.0, 0.0), depth: Vec4::new(0.0, 0.0, special, 0.0), ..default() },
                     lit: false,
                     base: Some(image),
                     lightmap: None,
@@ -1005,7 +1032,7 @@ pub fn materials_for(
                     tint: Vec4::ONE,
                     options: Vec4::new(1.0, 0.0, 0.0, 0.0),
                     extra: Vec4::new(0.0, 0.0, 0.0, frame_writes()),
-                    depth: Vec4::new(0.0, detailed, 0.0, 0.0),
+                    depth: Vec4::new(0.0, detailed, surface.map_or(0.0, material_maps::special), 0.0),
                     ..default()
                 },
                 lit: false,
@@ -1060,6 +1087,9 @@ struct PreparedTexture {
     /// that replaced it, while a pack or dump is set.
     name: Option<String>,
     applied: Option<std::path::PathBuf>,
+    /// NATIVE (this fork, material_maps): the texture's surface type, while
+    /// material detail or water effects are on.
+    surface: Option<material_maps::Kind>,
     /// NATIVE (this fork, material_maps): the texture's name and its
     /// detail map, while material detail is on (opaque and cut-out
     /// textures).
@@ -1101,11 +1131,17 @@ fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::
         2
     };
     let own_levels = levels.len() as u8;
-    // NATIVE (this fork, material_maps): the detail map of an opaque or
-    // cut-out texture, from level 0 as drawn (a replacement's), named by
-    // the disc's texels.
-    let detail = (material_maps::enabled() && class != 2).then(|| {
-        let stem = name.clone().unwrap_or_else(|| texture_pack::name(bitmap.width, bitmap.height, &levels[0]));
+    // NATIVE (this fork, material_maps): the surface type (material detail,
+    // water effects) of the texture named by the disc's texels, and the
+    // detail map of an opaque or cut-out one, from level 0 as drawn (a
+    // replacement's).
+    let stem = material_maps::typing().then(|| name.clone().unwrap_or_else(|| texture_pack::name(bitmap.width, bitmap.height, &levels[0])));
+    let surface = stem.as_deref().map(|s| {
+        let (line, guessed) = material_maps::choose(s, label);
+        material_maps::report(s, label, line.kind, guessed, &class.to_string());
+        line.kind
+    });
+    let detail = stem.filter(|_| material_maps::enabled() && class != 2).map(|stem| {
         let source = material_maps::Source { name: &stem, label, width: width.into(), height: height.into(), rgba: &levels[0], record_width: bitmap.width.into(), flags: bitmap.flags };
         let d = material_maps::make(&source);
         (stem, d)
@@ -1113,7 +1149,7 @@ fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::
     // NATIVE ENHANCEMENT (texfilter, "sharp"): the chain continued to 1×1
     // and an anisotropic sampler; the original keeps these levels.
     let levels = texfilter::with_chain(width.into(), height.into(), levels, sharp);
-    Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, detail })
+    Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, surface, detail })
 }
 
 /// prepare_texture for every record (lightmaps and records without a

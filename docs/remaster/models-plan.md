@@ -161,7 +161,9 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
    type the owner asked for. The owner's playtest: "Looks good". The owner
    (2026-11-22): tune it further once better models and textures exist
    (strengths, types, hand-made maps), not before.
-2. **M2** Water shader on today's water.
+2. **M2** Water shader on today's water. Built 2026-11-22
+   (decisions/0016): ripples, a wobbling texture, glints, a sheen and soft
+   shores. The owner's playtest is next.
 3. **M3** Foliage on today's plants: sway, edges, light through.
 4. **M4** Exporter: objects, level scenes and the collision layer, checked
    in Blender on Windows.

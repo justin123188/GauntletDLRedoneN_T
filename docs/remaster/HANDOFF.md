@@ -287,6 +287,8 @@ later. And effects look better mostly through their textures.
    - M1, material detail: built 2026-11-22 (decisions/0015; F10 →
      Graphics → Material detail; surface types in texture_pack\materials.tsv,
      guessed from the labels, gems included).
+   - M2, water effects: built 2026-11-22 (decisions/0016; F10 →
+     Graphics → Water effects; C1's channels show it well).
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
@@ -344,4 +346,6 @@ memory. The port stays the base.
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
 - [x] Material detail (decisions/0015): the owner's playtest 2026-11-22,
       "Looks good".
+- [ ] Water effects (decisions/0016): built 2026-11-22; the owner's
+      playtest next (the glints' strength wants judging in motion).
 - [ ] Camera follow-ups (§3) as the owner asks.

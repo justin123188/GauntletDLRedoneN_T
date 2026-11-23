@@ -40,6 +40,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | smaa | false | false | anti-aliasing by SMAA instead of MSAA (the main page's anti-aliasing row) |
 | hd_textures | false | false | the generated 4× texture pack; turning it on generates the pack once; outside the presets, Original turns it off |
 | material_detail | true | false | NATIVE (this fork): bump and shine maps on the opaque and cut-out textures, lit by the point, torch and level lights; made as a level loads (Material detail, below) |
+| water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -638,6 +639,25 @@ they do not.
     brightness.
   - At 2560×1440 the median frame takes +0.16 ms (5.40 → 5.56, uncapped).
   - G1 loads 0.1 s slower.
+
+### Water effects (this fork, 2026-11-22)
+
+decisions/0016-water.md; models-plan.md M2.
+- **Marking.** Materials whose texture's surface type is water get
+  GsParams depth.z 1 at load. The levels' water is translucent 30-frame
+  animations: C1's SWATER, G3's and I3's WATER, A2's WATER, GWATER, HWATER
+  and RAPIDS.
+- **Shading.** gs.wgsl adds:
+  - ripples in UV space that follow the texture's scroll;
+  - the ripples bending the water texture itself (what shows most on the
+    dark textures);
+  - lighting as material detail, with glints;
+  - a stylised Fresnel sheen of the level's light colour;
+  - for translucent water with the depth prepass (ambient occlusion on), a
+    faded edge and a faint foam line.
+- **The clock.** It follows the updates and stops with the game.
+- **Measured.** Off, frames are pixel-identical. In C1 at 2560×1440 it
+  costs up to 0.4 ms.
 
 ## Settings overlay and keys
 

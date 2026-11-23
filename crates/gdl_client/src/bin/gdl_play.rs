@@ -846,11 +846,12 @@ fn apply_graphics(
     let sharp = s.texture_filter == gdl_client::settings::TextureFilter::Sharp;
     // TEST switch GDL_SHARP_BIAS: the sharp filter's LOD bias (experiments).
     let lod_bias = std::env::var("GDL_SHARP_BIAS").ok().and_then(|v| v.parse().ok()).unwrap_or(gdl_client::texfilter::LOD_BIAS);
-    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows, material_detail: s.material_detail };
+    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows, material_detail: s.material_detail, water: s.water_effects };
     // NATIVE (this fork, decisions/0015): the textures prepared from now on
     // (the next level's) get detail maps; the shader switch above shows or
     // hides the ones made.
     gdl_client::material_maps::set_enabled(s.material_detail);
+    gdl_client::material_maps::set_water(s.water_effects);
     let now = (sharp, s.sharpen, enhance);
     // Before the first change everything is the original presentation.
     let was = last.unwrap_or((false, 0, gdl_client::Enhance::default()));
@@ -3054,6 +3055,11 @@ fn present_scene_light(
     if last.is_none_or(|(k, _)| k[1..4] != key.0[1..4]) {
         gdl_client::write_sun(&queue, towards.extend(1.0));
     }
+    // NATIVE (this fork, decisions/0016): the colour water reflects, the
+    // level's light colour (at most 1 per channel).
+    if last.is_none_or(|(k, _)| k[4..7] != key.0[4..7]) {
+        gdl_client::write_sky(&queue, colour / colour.max_element().max(1.0));
+    }
     *last = Some(key);
     // Only the materials whose values differ are taken mutably: Assets'
     // iter_mut marks every material modified, and a new override material
@@ -3077,6 +3083,23 @@ fn present_scene_light(
             }
         }
     }
+}
+
+/// NATIVE (this fork, decisions/0016): the water's clock, written every
+/// frame. It follows the stepped updates (30 a second) and moves smoothly
+/// between them for at most one update's time, so it stops when the game
+/// pauses or freezes (GDL_FREEZE_AT: constant frames).
+fn present_water_clock(sim: Res<Sim>, queue: Res<bevy::render::renderer::RenderQueue>, mut last: Local<Option<(u64, std::time::Instant)>>) {
+    let now = std::time::Instant::now();
+    let since = match *last {
+        Some((u, at)) if u == sim.updates => at,
+        _ => {
+            *last = Some((sim.updates, now));
+            now
+        }
+    };
+    let between = now.duration_since(since).as_secs_f32().min(1.0 / 30.0);
+    gdl_client::write_water_clock(&queue, sim.updates as f32 / 30.0 + between);
 }
 
 /// ProcessEffects' MBPosLightNew for effects with an SfxSetLight radius
@@ -11979,6 +12002,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // NATIVE (this fork, decisions/0015): material detail from the first
     // textures loaded, with the pack's materials.tsv.
     gdl_client::material_maps::set_enabled(settings.material_detail);
+    gdl_client::material_maps::set_water(settings.water_effects);
     gdl_client::material_maps::load_table(gdl_client::texture_pack::pack_dir().as_deref());
     // A complete HD texture pack is in use from the start, front end
     // included (hd_textures_job generates a missing one).
@@ -12292,7 +12316,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 play_menu_cues,
                 run_attract,
                 ps2_viewport,
-                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
+                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_water_clock, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
                 front_text,
                 present_hud,
                 present_menu_icon,

@@ -106,6 +106,10 @@ NATIVE (this fork, decisions/0015): material detail.
   bytes.
 - **Off.** With the switch off (enhance2.y 0) or no map bound, every path
   computes what it did before: frames are pixel-identical.
+- **Water** (decisions/0016). GsParams depth.z 1 marks a water surface,
+  and enhance2.z switches the water shading. PointLights gained `water`:
+  x the water's clock, yzw the colour it reflects. The buffer is now
+  32 × 32 + 64 bytes.
 
 ## Verification
 

@@ -96,13 +96,14 @@ enum GRow {
     AmbientOcclusion,
     Bloom,
     MaterialDetail,
+    Water,
     HdTextures,
     TexturePack,
     SaveTextures,
     Back,
 }
 
-const GRAPHICS: [GRow; 15] = [
+const GRAPHICS: [GRow; 16] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -114,6 +115,7 @@ const GRAPHICS: [GRow; 15] = [
     GRow::AmbientOcclusion,
     GRow::Bloom,
     GRow::MaterialDetail,
+    GRow::Water,
     GRow::HdTextures,
     GRow::TexturePack,
     GRow::SaveTextures,
@@ -312,6 +314,8 @@ impl Overlay {
                     GRow::Bloom => format!("Bloom                {}", on(s.bloom)),
                     // NATIVE (this fork, decisions/0015).
                     GRow::MaterialDetail => format!("Material detail      {}", on(s.material_detail)),
+                    // NATIVE (this fork, decisions/0016).
+                    GRow::Water => format!("Water effects        {}", on(s.water_effects)),
                     GRow::HdTextures => format!(
                         "HD textures          {}",
                         match (s.hd_textures, &self.hd) {
@@ -349,6 +353,10 @@ impl Overlay {
             if GRAPHICS.get(self.cursor) == Some(&GRow::MaterialDetail) {
                 out.push("Material detail: bump and shine on stone, wood, metal and more,".to_string());
                 out.push("lit by torches, spells and the sun. Turned on, from the next level.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::Water) {
+                out.push("Water effects: ripples, glints from the sun and torches, a sheen,".to_string());
+                out.push("soft shores (with ambient occlusion). Turned on, from the next level.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
@@ -567,6 +575,7 @@ impl Overlay {
                     GRow::AmbientOcclusion => s.ambient_occlusion = !s.ambient_occlusion,
                     GRow::Bloom => s.bloom = !s.bloom,
                     GRow::MaterialDetail => s.material_detail = !s.material_detail,
+                    GRow::Water => s.water_effects = !s.water_effects,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
                     GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
                     GRow::SaveTextures => return Effect::SaveTextures,
