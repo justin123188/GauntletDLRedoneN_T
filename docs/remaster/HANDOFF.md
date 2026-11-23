@@ -366,8 +366,12 @@ memory. The port stays the base.
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
       "Looks good". G1's swamp fixed afterwards (decisions/0017): it
       needs a look in play.
-- [ ] Potion glow (decisions/0019): the owner's playtest 2026-11-22
-      asked for a shorter flare, now 0.75 s; that build's playtest next.
+- [x] Potion glow (decisions/0019): the owner's playtest 2026-11-23 of
+      the 0.75 s flare, "yes .75 feels much better".
+- [ ] Barrels missing, chests and portal spirals still (the owner's
+      playtest 2026-11-23, G1, one session; maybe a one-off): not
+      reproduced yet. Suspect in research/unknowns.md "Item trees after
+      another level".
 - [x] Frames that varied from run to run (decisions/0020): fixed
       2026-11-23, SMAA before sharpening.
 - [ ] Interpolation while the simulation waits (research/unknowns.md):

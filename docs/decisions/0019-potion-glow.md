@@ -94,4 +94,5 @@ APPDATA, GDL_NO_GAMEPADS):
   and fixed 2026-11-23: the order of SMAA and sharpening
   (decisions/0020).
 - **The owner's playtest:** of the 1 s flare, shorter (above); of the
-  0.75 s flare, next.
+  0.75 s flare (2026-11-23, the build of 107c6e8): "yes .75 feels much
+  better".
