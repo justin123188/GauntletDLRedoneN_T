@@ -295,6 +295,14 @@ later. And effects look better mostly through their textures.
      → Graphics → Gem glow). Crystals, runes and gargoyle items glow in
      their colour and flare while their pickup sparkle plays. Part of
      item 3, effects.
+   - Next, the owner (2026-11-22): the same glow for magic potions — a
+     soft resting glow, a flare when picked up. To research first: the
+     potion pickups' subtypes and colours (POTION_ICON_GRE/YEL/RED/BLU
+     suggest coloured potions), and whether their pickup starts an effect
+     the flare can follow (gems: StartGemFX). If not, a NATIVE flare of its
+     own length from the pickup. Extend present_gem_glow (gdl_play) and
+     decisions/0018, or a new record. Then the model phase's M4, the
+     Blender exporter (offered; the owner asked for the potion glow first).
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
