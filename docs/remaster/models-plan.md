@@ -127,7 +127,8 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
 - **V1, today's plants.** Wind sway (by height on the card), softer cut-out
   edges (alpha to coverage) and light shining through.
 - **V2, replacement plants and trees.** 3D models keyed by label, like
-  props.
+  props. First targets, the owner (2026-11-22): G1's ground clumps of
+  grass and reeds, which the owner finds weak.
 - **V3, extra scatter (optional).** Grass and flowers on grass-type ground:
   drawn only, no collision, the same layout every time (seeded per level),
   with a density setting.
@@ -167,7 +168,9 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
 3. **M3** Foliage on today's plants: sway, edges, light through. Built
    2026-11-22 (decisions/0017): sway and light through leaves. Softer
    edges wait for MSAA, which ambient occlusion turns off. The owner's
-   playtest is next.
+   playtest: the moss, bushes and corn sway. G1's ground clumps of grass
+   and reeds stay still; the owner wants them replaced in V2 rather than
+   tuned.
 4. **M4** Exporter: objects, level scenes and the collision layer, checked
    in Blender on Windows.
 5. **M5** Model pack loader for props, with light transfer, F5 and the

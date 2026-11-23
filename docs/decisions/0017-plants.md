@@ -80,3 +80,11 @@ APPDATA, GDL_NO_GAMEPADS):
   GDL_BASELINE=1.
 - **Motion.** Frozen frames could not show it: the camera still moves
   between the moments the harness can freeze. The owner judges it in play.
+- **The owner's playtest** (2026-11-22, the build of ceee18b, G1, with
+  marked screenshots):
+  - The hanging moss, the bushes and the corn field sway.
+  - The ground clumps of grass and reeds do not visibly move. The owner:
+    "kinda suck anyway", to be replaced completely in the vegetation
+    overhaul (models-plan.md V2). So they were not tuned. Probably they
+    are see-through grass at the small GRASS_SWAY, or a label not
+    recognised: not checked.
