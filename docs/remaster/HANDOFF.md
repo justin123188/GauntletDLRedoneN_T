@@ -342,6 +342,6 @@ memory. The port stays the base.
       2026-11-22, "that's pretty good!".
 - [x] Sharper fonts (decisions/0013): the owner's playtest 2026-11-22 with
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
-- [ ] Material detail (decisions/0015): built 2026-11-22; the owner's
-      playtest next (the Tower's stone walls show it most).
+- [x] Material detail (decisions/0015): the owner's playtest 2026-11-22,
+      "Looks good".
 - [ ] Camera follow-ups (§3) as the owner asks.

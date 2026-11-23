@@ -111,8 +111,9 @@ scratch copies, isolated APPDATA, GDL_NO_GAMEPADS):
   Loading G1 took 1.43 s against 1.33 s (materials_for, 15 packages: 173 ms
   against 97 ms).
 
+The owner's playtest (2026-11-22, the build of e26c5f0): "Looks good".
+
 Not done:
-- the owner's playtest;
 - water ripples and flow (M2), foliage sway and light through leaves
   (M3), lava glow, gem sparkle;
 - a global strength setting;
