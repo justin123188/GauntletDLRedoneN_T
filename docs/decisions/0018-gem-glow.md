@@ -68,5 +68,7 @@ APPDATA, GDL_NO_GAMEPADS):
   frames are identical too.
 - **Game logic.** Simulation hashes over 600 updates of the G1 walk equal
   the reference, with the defaults and with GDL_BASELINE=1.
-- **Not verified.** The pickup flare in frames: the scripted walk takes no
-  gem. That waits for the owner's playtest.
+- **The pickup flare in frames:** not seen, as the scripted walk takes no
+  gem.
+- **The owner's playtest** (2026-11-22, the build of 6ef588c, the glow and
+  picking gems up): "Looks good".

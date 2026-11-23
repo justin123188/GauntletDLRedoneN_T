@@ -355,8 +355,8 @@ memory. The port stays the base.
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
       "Looks good". G1's swamp fixed afterwards (decisions/0017): it
       needs a look in play.
-- [ ] Gem glow (decisions/0018): built 2026-11-22; the owner's playtest
-      next (the pickup flare was not seen in test frames).
+- [x] Gem glow (decisions/0018): the owner's playtest 2026-11-22, "Looks
+      good".
 - [x] Plant effects (decisions/0017): the owner's playtest 2026-11-22.
       Moss, bushes and corn sway; G1's ground grass clumps do not, and
       the owner wants them replaced in the vegetation overhaul instead.
