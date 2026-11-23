@@ -431,6 +431,17 @@ fn reload_textures(
         // NATIVE (this fork, decisions/0013): font pages first (HUD images).
         let fonts = make_font_pages(&front);
         let mut report = gdl_client::texture_reload::reload(&mut images);
+        // NATIVE (this fork, decisions/0015): materials.tsv and the detail
+        // maps whose table line, map files or texture changed.
+        let (maps, bad) = gdl_client::material_maps::reload(&mut images);
+        let mut materials_line = Vec::new();
+        if 0 < maps {
+            materials_line.push(format!("{maps} material maps made again"));
+        }
+        if 0 < bad {
+            materials_line.push(format!("materials.tsv: {bad} lines not understood"));
+        }
+        let materials_line = materials_line.join(", ");
         // HUD pictures whose file changed are decoded again when drawn.
         let sets = &mut *hud_sets;
         for (k, file) in gdl_client::texture_reload::changed_files(&sets.names, &tp::find) {
@@ -447,7 +458,7 @@ fn reload_textures(
         if let Some(dump) = tp::dump_dir() {
             let _ = gdl_client::texture_browser::write(&dump, tp::pack_dir().as_deref());
         }
-        [fixed, fonts, report.message()].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("; ")
+        [fixed, fonts, report.message(), materials_line].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("; ")
     };
     eprintln!("F5: {line}");
     notice.0 = Some((line, std::time::Instant::now()));
@@ -835,7 +846,11 @@ fn apply_graphics(
     let sharp = s.texture_filter == gdl_client::settings::TextureFilter::Sharp;
     // TEST switch GDL_SHARP_BIAS: the sharp filter's LOD bias (experiments).
     let lod_bias = std::env::var("GDL_SHARP_BIAS").ok().and_then(|v| v.parse().ok()).unwrap_or(gdl_client::texfilter::LOD_BIAS);
-    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows };
+    let enhance = gdl_client::Enhance { sharp, full_colour: s.full_colour, smooth_lightmaps: s.smooth_lightmaps, lod_bias, shadows: s.shadows, material_detail: s.material_detail };
+    // NATIVE (this fork, decisions/0015): the textures prepared from now on
+    // (the next level's) get detail maps; the shader switch above shows or
+    // hides the ones made.
+    gdl_client::material_maps::set_enabled(s.material_detail);
     let now = (sharp, s.sharpen, enhance);
     // Before the first change everything is the original presentation.
     let was = last.unwrap_or((false, 0, gdl_client::Enhance::default()));
@@ -3006,7 +3021,13 @@ fn request_tree_texmods(mods: &[NodeTexMod], lib: &Library, f: i32, seq: usize, 
 /// one directional light (MBAddLight: intensity +0x108 × colour +0xfc,
 /// direction +0xf0, normalised). Lit materials get the light towards which
 /// normals shade (−direction, mirrored into render space).
-fn present_scene_light(sim: Res<Sim>, settings: Res<gdl_client::settings::Settings>, mut last: Local<Option<([f32; 8], usize)>>, mut materials: ResMut<Assets<gdl_client::GsMaterial>>) {
+fn present_scene_light(
+    sim: Res<Sim>,
+    settings: Res<gdl_client::settings::Settings>,
+    mut last: Local<Option<([f32; 8], usize)>>,
+    mut materials: ResMut<Assets<gdl_client::GsMaterial>>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+) {
     let g = &sim.game;
     if g.level.len() < 0x10c {
         return;
@@ -3027,6 +3048,11 @@ fn present_scene_light(sim: Res<Sim>, settings: Res<gdl_client::settings::Settin
     let key = ([ambient, towards.x, towards.y, towards.z, colour.x, colour.y, colour.z, add], materials.len());
     if *last == Some(key) {
         return;
+    }
+    // NATIVE (this fork, decisions/0015): material detail's level light
+    // (bump shading of the baked light, its highlights).
+    if last.is_none_or(|(k, _)| k[1..4] != key.0[1..4]) {
+        gdl_client::write_sun(&queue, towards.extend(1.0));
     }
     *last = Some(key);
     // Only the materials whose values differ are taken mutably: Assets'
@@ -5872,6 +5898,7 @@ fn present_streaks(
             lightmap: None,
             overlay: None,
             lights: gdl_client::point_light_buffer(),
+            detail: None,
             alpha_mode: AlphaMode::Blend,
             draw: gdl_client::GsDraw {
                 additive: false,
@@ -6199,6 +6226,7 @@ fn present_particles(
                 lightmap: None,
                 overlay: None,
                 lights: gdl_client::point_light_buffer(),
+                detail: None,
                 alpha_mode: if blend == gdl_core::psys::Blend::Additive { AlphaMode::Add } else { AlphaMode::Blend },
                 draw: gdl_client::GsDraw {
                     additive: blend == gdl_core::psys::Blend::Additive,
@@ -11948,6 +11976,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     gdl_client::texture_pack::configure(pack);
+    // NATIVE (this fork, decisions/0015): material detail from the first
+    // textures loaded, with the pack's materials.tsv.
+    gdl_client::material_maps::set_enabled(settings.material_detail);
+    gdl_client::material_maps::load_table(gdl_client::texture_pack::pack_dir().as_deref());
     // A complete HD texture pack is in use from the start, front end
     // included (hd_textures_job generates a missing one).
     if settings.hd_textures

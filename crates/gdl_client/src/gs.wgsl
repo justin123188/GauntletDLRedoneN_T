@@ -51,12 +51,15 @@ struct GsParams {
 // is the original presentation): x sharp texture filtering (texfilter.rs),
 // y full colour precision, z smooth lightmaps, w the sharp filter's
 // level-of-detail bias; enhance2: x character shadows (gdl_play's
-// shadow-casting directional light, the first).
+// shadow-casting directional light, the first), y material detail (this
+// fork, material_maps.rs). sun: the level's light for material detail,
+// xyz towards it (render space), w its strength (0: none).
 struct PointLights {
     pos: array<vec4<f32>, 32>,
     col: array<vec4<f32>, 32>,
     enhance: vec4<f32>,
     enhance2: vec4<f32>,
+    sun: vec4<f32>,
 };
 
 #ifdef BINDLESS
@@ -72,6 +75,8 @@ struct GsBindings {
     overlay_texture: u32,
     overlay_sampler: u32,
     lights: u32,
+    detail_texture: u32,
+    detail_sampler: u32,
 };
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage> material_indices: array<GsBindings>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(10) var<storage> material_array: array<GsParams>;
@@ -85,6 +90,8 @@ struct GsBindings {
 @group(#{MATERIAL_BIND_GROUP}) @binding(5) var overlay_texture: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(6) var overlay_sampler: sampler;
 @group(#{MATERIAL_BIND_GROUP}) @binding(7) var<storage, read> plights: PointLights;
+@group(#{MATERIAL_BIND_GROUP}) @binding(8) var detail_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(9) var detail_sampler: sampler;
 #endif
 
 // Point lights: VU1 microcode (Tower state vu1MicroMem.bin, pairs 652..716
@@ -125,6 +132,134 @@ fn pl_enhance2(pl: u32) -> vec4<f32> {
 #else
     return plights.enhance2;
 #endif
+}
+
+fn pl_sun(pl: u32) -> vec4<f32> {
+#ifdef BINDLESS
+    return plights_array[pl].sun;
+#else
+    return plights.sun;
+#endif
+}
+
+// NATIVE (this fork, material_maps.rs): material detail. The detail map's
+// normal (tangent space, OpenGL convention: green towards the image's
+// top, −v) on the surface. The tangent frame comes from the screen-space
+// derivatives of the position and the UVs (no mesh tangents): T = ∂p/∂u
+// and B = ∂p/∂v solve dp = T du + B dv for both screen directions; the
+// determinant's sign keeps mirrored UVs and the mirrored render root right.
+fn detail_normal(n: vec3<f32>, dp1: vec3<f32>, dp2: vec3<f32>, du1: vec2<f32>, du2: vec2<f32>, xy: vec2<f32>) -> vec3<f32> {
+    let det = du1.x * du2.y - du1.y * du2.x;
+    if abs(det) < 1e-14 {
+        return n;
+    }
+    let s = sign(det);
+    var t = (dp1 * du2.y - dp2 * du1.y) * s;
+    var b = (dp2 * du1.x - dp1 * du2.x) * s;
+    t = t - n * dot(n, t);
+    b = b - n * dot(n, b);
+    let lt = length(t);
+    let lb = length(b);
+    if lt < 1e-12 || lb < 1e-12 {
+        return n;
+    }
+    // A distant level's averaged normals are shorter: z rebuilt from them
+    // flattens the bumps.
+    let m = xy * 2.0 - 1.0;
+    let z = sqrt(max(1.0 - dot(m, m), 0.0));
+    return normalize(t / lt * m.x - b / lb * m.y + n * z);
+}
+
+// How much the bumps shade the baked light along the level's light
+// direction, how much they shade the live lights, and the highlights'
+// strength (NATIVE values, by eye).
+const BUMP_SHADE: f32 = 0.8;
+const BUMP_LIGHT: f32 = 1.0;
+const SPEC_STRENGTH: f32 = 1.0;
+// The level light's highlights on the light-baked world, times the baked
+// light there (dark corners do not glint).
+const SUN_SPEC: f32 = 0.6;
+
+// Blinn-Phong from the roughness: the exponent, and the strength with its
+// normalisation ((s + 8) / 8π).
+fn spec_power(rough: f32) -> f32 {
+    return exp2(1.0 + 11.0 * (1.0 - rough));
+}
+
+fn spec_scale(rough: f32) -> f32 {
+    let smooth_ = 1.0 - rough;
+    return smooth_ * smooth_ * SPEC_STRENGTH * (spec_power(rough) + 8.0) / 25.13274;
+}
+
+// Below this strength a highlight is too faint to see (matte types:
+// ground, grass, cloth, auto): not evaluated.
+const SPEC_MIN: f32 = 0.05;
+
+// A surface's highlight constants: the exponent and the strength (0: none).
+fn spec_consts(rough: f32) -> vec2<f32> {
+    let s = spec_scale(rough);
+    return vec2(spec_power(rough), select(0.0, s, SPEC_MIN <= s));
+}
+
+// One light's highlight: towards it `l`, towards the eye `v`.
+fn highlight(n: vec3<f32>, l: vec3<f32>, v: vec3<f32>, sc: vec2<f32>) -> f32 {
+    if sc.y <= 0.0 {
+        return 0.0;
+    }
+    let h = normalize(l + v);
+    return pow(max(dot(n, h), 0.0), sc.x) * sc.y;
+}
+
+// The detail normal's tilt: its part along the surface. Shading by
+// dot(tilt, l) brightens the slopes facing a light and darkens the others
+// by as much, so the bumps keep a surface's mean light (shading by
+// dot(n, l) − dot(n_geo, l) also dims it, by the normal's shorter
+// perpendicular part: walls by torches came out darker).
+fn tilt(n: vec3<f32>, n_geo: vec3<f32>) -> vec3<f32> {
+    return n - n_geo * dot(n, n_geo);
+}
+
+// The baked light's bump shading towards the level's light.
+fn bump_shade(pl: u32, t: vec3<f32>) -> f32 {
+    let sun = pl_sun(pl);
+    if sun.w <= 0.0 {
+        return 1.0;
+    }
+    return clamp(1.0 + BUMP_SHADE * sun.w * dot(t, sun.xyz), 0.55, 1.45);
+}
+
+struct DetailLights {
+    diffuse: vec3<f32>,
+    specular: vec3<f32>,
+};
+
+// point_lights on the surface (`n_geo`, as the original), its bumps
+// (`t`, the detail normal's tilt) shading each light around that, and
+// the highlights on the detail normal `n`.
+fn detail_point_lights(pl: u32, n: vec3<f32>, n_geo: vec3<f32>, t: vec3<f32>, p: vec3<f32>, v: vec3<f32>, sc: vec2<f32>) -> DetailLights {
+    var out = DetailLights(vec3(0.0), vec3(0.0));
+    for (var i = 0u; i < 32u; i = i + 1u) {
+        let lp = pl_pos(pl, i);
+        if lp.w <= 0.0 {
+            break;
+        }
+        let lv = lp.xyz - p;
+        let d = max(length(lv), 0.001);
+        let fall = 1.0 - (d * d) / (lp.w * lp.w);
+        let l = lv / d;
+        let cos_t = dot(n_geo, l);
+        if fall > 0.0 && cos_t > 0.0 {
+            let c = pl_col(pl, i);
+            let a = 7.5 * c.a * fall / d;
+            let k = min(a * cos_t, 1.0);
+            let kb = clamp(k + min(a, 1.0) * BUMP_LIGHT * dot(t, l), 0.0, 1.5);
+            out.diffuse = out.diffuse + c.rgb * kb;
+            if 0.0 < sc.y && 0.0 < dot(n, l) {
+                out.specular = out.specular + c.rgb * k * highlight(n, l, v, sc);
+            }
+        }
+    }
+    return out;
 }
 
 // NATIVE ENHANCEMENT character shadows: 1 lit, 0 in the shadow of a
@@ -305,6 +440,45 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     }
     alpha = alpha * in.color.a;
 #endif
+    // NATIVE (this fork, material_maps.rs): material detail, while it is on
+    // (enhance2.y) for a material with a detail map (depth.y), not chrome,
+    // additive draws, pbBlit sprites or hit flashes. Off, `n` is the
+    // surface normal and nothing below changes.
+    let n_geo = normalize(in.world_normal);
+    var n = n_geo;
+    var detailed = false;
+    var rough = 1.0;
+    var metal = 0.0;
+#ifdef VERTEX_UVS_A
+#ifndef ADDITIVE
+    {
+        var duv = in.uv;
+        if params.extra.z > 0.5 {
+            duv = duv * params.uv_xform.xz + params.uv_xform.yw;
+        }
+        duv = duv + params.options.zw;
+        // Sampled and differentiated in uniform control flow.
+#ifdef BINDLESS
+        let dm = textureSampleBias(bindless_textures_2d[material_indices[slot].detail_texture], bindless_samplers_filtering[material_indices[slot].detail_sampler], duv, enhance.w);
+#else
+        let dm = textureSampleBias(detail_texture, detail_sampler, duv, enhance.w);
+#endif
+        let dp1 = dpdx(in.world_position.xyz);
+        let dp2 = dpdy(in.world_position.xyz);
+        let du1 = dpdx(duv);
+        let du2 = dpdy(duv);
+        if pl_enhance2(pl).y > 0.5 && params.depth.y > 0.5 && params.extra.y < 0.5 && -0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
+            detailed = true;
+            n = detail_normal(n_geo, dp1, dp2, du1, du2, dm.xy);
+            rough = dm.z;
+            metal = dm.w;
+        }
+    }
+#endif
+#endif
+    // The highlights (added after the texture: a metal's take its colour).
+    var spec = vec3(0.0);
+    let to_eye = normalize(view.world_position.xyz - in.world_position.xyz);
     // Character shadows fall on the unlit parts — the world, whose light is
     // baked — shaded at the end (not psys sprites, additive draws or the
     // lightmap pass on its own). Lit parts (characters, items) keep their
@@ -317,20 +491,52 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     }
 #endif
     if 0.5 < params.light_dir.w && params.light_dir.w < 1.5 {
-        let n = normalize(in.world_normal);
-        let d = max(dot(n, params.light_dir.xyz), 0.0);
+        var d = max(dot(n, params.light_dir.xyz), 0.0);
+        let t_n = tilt(n, n_geo);
+        if detailed {
+            // The surface's own light, its bumps around it.
+            d = max(dot(n_geo, params.light_dir.xyz), 0.0);
+            if 0.0 < d {
+                d = clamp(d + BUMP_LIGHT * dot(t_n, params.light_dir.xyz), 0.0, 1.0);
+            }
+        }
         // VU1 program A: min(ambient + light, 128) + point lights, ≤ 255.
         let base = min(vec3(1.0), vec3(params.light.a + params.scale.y) + d * params.light.rgb);
-        rgb = rgb * min(base + point_lights(pl, n, in.world_position.xyz), vec3(255.0 / 128.0));
+        var lights = vec3(0.0);
+        if detailed {
+            let sc = spec_consts(rough);
+            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc);
+            lights = dl.diffuse;
+            spec = dl.specular;
+            let dn = dot(n, params.light_dir.xyz);
+            if 0.0 < d && 0.0 < dn {
+                spec = spec + params.light.rgb * dn * highlight(n, params.light_dir.xyz, to_eye, sc);
+            }
+        } else {
+            lights = point_lights(pl, n, in.world_position.xyz);
+        }
+        rgb = rgb * min(base + lights, vec3(255.0 / 128.0));
     } else {
         // VU1 program B (vertex colours, lightmap pass): min(colour × scale,
         // 128) + point lights, ≤ 255. HYPOTHESIS: the scale is
         // MBLightmapMod / MBNoShadeMod's 1 + add. light_dir.w −1: drawn
         // without VU1 (pbBlit psys sprites), so no point lights.
-        let base = min(rgb * max(1.0 + params.scale.x, 0.0), vec3(1.0));
+        var base = min(rgb * max(1.0 + params.scale.x, 0.0), vec3(1.0));
         var lights = vec3(0.0);
-        if params.light_dir.w > -0.5 {
-            lights = point_lights(pl, normalize(in.world_normal), in.world_position.xyz);
+        if detailed {
+            let t_n = tilt(n, n_geo);
+            let sc = spec_consts(rough);
+            let dl = detail_point_lights(pl, n, n_geo, t_n, in.world_position.xyz, to_eye, sc);
+            lights = dl.diffuse;
+            spec = dl.specular;
+            let sun = pl_sun(pl);
+            let d = dot(n, sun.xyz);
+            if 0.0 < sun.w && 0.0 < d {
+                spec = spec + base * (sun.w * SUN_SPEC * d * highlight(n, sun.xyz, to_eye, sc));
+            }
+            base = base * bump_shade(pl, t_n);
+        } else if params.light_dir.w > -0.5 {
+            lights = point_lights(pl, n, in.world_position.xyz);
         }
         rgb = min(base + lights, vec3(255.0 / 128.0));
     }
@@ -376,6 +582,9 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     if params.options.x > 0.5 {
         rgb = gs_modulate(rgb, t.rgb, full);
         alpha = alpha * t.a * (255.0 / 128.0);
+    }
+    if detailed {
+        rgb = rgb + spec * mix(vec3(1.0), t.rgb, metal);
     }
 #endif
     rgb = min(rgb, vec3(1.0));

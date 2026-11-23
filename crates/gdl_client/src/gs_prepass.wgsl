@@ -37,6 +37,8 @@ struct GsBindings {
     overlay_texture: u32,
     overlay_sampler: u32,
     lights: u32,
+    detail_texture: u32,
+    detail_sampler: u32,
 };
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<storage> material_indices: array<GsBindings>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(10) var<storage> material_array: array<GsParams>;

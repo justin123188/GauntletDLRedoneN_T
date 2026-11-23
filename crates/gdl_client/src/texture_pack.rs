@@ -126,6 +126,20 @@ by character, level and label.\r
 \r
 Images made with ChatGPT go in the texture_work folder instead: the game\r
 fits them and puts the result here. See texture_work\\README.txt.\r
+\r
+Material detail (F10, Graphics): bump and shine on the textures. Each\r
+texture has a surface type, guessed from its label. To set one, add a line\r
+to materials.tsv in this folder: the file name, then the type, for example\r
+    0edda1314885f6a6 stone\r
+Types: stone, wood, metal, ground, grass, foliage, water, lava, ice, gem,\r
+cloth, skin, auto, none (none: no detail). A line can also set\r
+bump=1.5 (0 flat .. 4), rough=0.4 (0 shiny .. 1 matte) and metal=1.\r
+Your own maps go beside the texture, any size:\r
+    0edda1314885f6a6_n.png   normal map (OpenGL style: green up)\r
+    0edda1314885f6a6_h.png   height (white high), the normal is made from it\r
+    0edda1314885f6a6_r.png   roughness (white matte, black shiny)\r
+    0edda1314885f6a6_m.png   metal (white metal, black not)\r
+What is missing is made from the texture itself. F5 in play reloads them.\r
 ";
 
 /// The user's pack in use (None: none).

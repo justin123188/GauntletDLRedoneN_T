@@ -23,10 +23,17 @@ struct Entry<'a> {
 pub fn write(dump: &Path, pack: Option<&Path>) -> std::io::Result<()> {
     let index = std::fs::read_to_string(dump.join("index.tsv")).unwrap_or_default();
     let sources = std::fs::read_to_string(dump.join("sources.tsv")).unwrap_or_default();
-    let html = page(&index, &sources, &|stem| pack.is_some_and(|p| p.join(format!("{stem}.png")).is_file()));
+    let html = page(&index, &sources, &|stem| pack.is_some_and(|p| p.join(format!("{stem}.png")).is_file()), &surface);
     let tmp = dump.join("index.html.tmp");
     std::fs::write(&tmp, html)?;
     std::fs::rename(tmp, dump.join("index.html"))
+}
+
+/// NATIVE (this fork, decisions/0015): a texture's surface type as
+/// material detail uses it (materials.tsv, else the label's guess).
+fn surface(stem: &str, label: &str) -> String {
+    let (kind, guessed) = crate::material_maps::describe(stem, label);
+    if guessed { format!("{} (guess)", kind.name()) } else { kind.name().to_string() }
 }
 
 /// The kinds of source in page order, with their headings.
@@ -51,8 +58,8 @@ fn esc(s: &str) -> String {
 }
 
 /// The page for an index.tsv and a sources.tsv (`replaced`: whether the
-/// pack has a texture's file).
-fn page(index: &str, sources: &str, replaced: &dyn Fn(&str) -> bool) -> String {
+/// pack has a texture's file; `surface`: a texture's surface type).
+fn page(index: &str, sources: &str, replaced: &dyn Fn(&str) -> bool, surface: &dyn Fn(&str, &str) -> String) -> String {
     let mut entries: HashMap<&str, Entry> = HashMap::new();
     for line in index.lines() {
         let f: Vec<&str> = line.split('\t').collect();
@@ -100,7 +107,7 @@ fn page(index: &str, sources: &str, replaced: &dyn Fn(&str) -> bool) -> String {
                 let _ = writeln!(body, "<div class=\"frames\"><h4>{} <small>{n} frames</small></h4><div class=\"row\">", esc(fam));
             }
             for stem in &stems[i..i + n] {
-                card(&mut body, stem, &entries[stem], replaced(stem));
+                card(&mut body, stem, &entries[stem], replaced(stem), &surface(stem, entries[stem].label));
             }
             if 1 < n {
                 body.push_str("</div></div>\n");
@@ -115,7 +122,7 @@ fn page(index: &str, sources: &str, replaced: &dyn Fn(&str) -> bool) -> String {
     TEMPLATE.replace("{COUNT}", &entries.len().to_string()).replace("{REPLACED}", &replaced_count.to_string()).replace("{BODY}", &body)
 }
 
-fn card(out: &mut String, stem: &str, e: &Entry, replaced: bool) {
+fn card(out: &mut String, stem: &str, e: &Entry, replaced: bool, surface: &str) {
     // Integer zoom up to a 128-pixel box (pixels stay square), else fit.
     let side = e.width.max(e.height).max(1) as f32;
     let zoom = if side <= 128.0 { (128.0 / side).floor().min(8.0) } else { 128.0 / side };
@@ -129,11 +136,13 @@ fn card(out: &mut String, stem: &str, e: &Entry, replaced: bool) {
     let mark = if replaced { "<span class=\"rep\">replaced</span>" } else { "" };
     let _ = writeln!(
         out,
-        "<figure data-k=\"{} {stem}\"><div class=\"img\"><img loading=\"lazy\" src=\"{stem}.png\" width=\"{w}\" height=\"{h}\" alt=\"\"></div><figcaption><b>{}</b>{mark}<br><code>{stem}.png</code><br>{}&times;{} &middot; {wrap}</figcaption></figure>",
+        "<figure data-k=\"{} {stem} {}\"><div class=\"img\"><img loading=\"lazy\" src=\"{stem}.png\" width=\"{w}\" height=\"{h}\" alt=\"\"></div><figcaption><b>{}</b>{mark}<br><code>{stem}.png</code><br>{}&times;{} &middot; {wrap}<br><span class=\"surf\">surface: {}</span></figcaption></figure>",
         esc(&e.label.to_lowercase()),
+        esc(surface),
         esc(e.label),
         e.width,
-        e.height
+        e.height,
+        esc(surface)
     );
 }
 
@@ -165,6 +174,7 @@ figure { margin: 0; width: 140px; background: var(--card); border: 1px solid var
 img { image-rendering: pixelated; max-width: 128px; max-height: 128px; }
 code { font-size: 11px; color: var(--accent); user-select: all; cursor: copy; }
 .rep { margin-left: 4px; color: var(--rep); font-weight: 600; }
+.surf { color: var(--muted); }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -172,6 +182,7 @@ code { font-size: 11px; color: var(--accent); user-select: all; cursor: copy; }
 <header>
 <h1>Saved textures <small>{COUNT} textures, {REPLACED} replaced</small></h1>
 <p>To replace a texture, make your own version of its picture and save it as a PNG with the same file name (click a name to select it, then copy) in the <b>texture_pack</b> folder beside the game. Any size up to 4096&times;4096 works; keep the proportions. Textures that repeat should join up seamlessly at their edges. The game reads the folder when it starts; press F5 in play to reload it. To make one with ChatGPT, see <b>texture_work\README.txt</b> beside the game.</p>
+<p>Surface types (material detail: bump and shine) are guessed from the labels. To set one, add a line with the file name and the type to <b>texture_pack\materials.tsv</b>, for example <code>0edda1314885f6a6 stone</code>. Types: stone, wood, metal, ground, grass, foliage, water, lava, ice, gem, cloth, skin, auto, none. Search for a type (for example <i>wood</i>) to see its textures.</p>
 <input id="q" type="search" placeholder="Search labels or file names (for example WIZ or FLOOR)" autofocus>
 </header>
 <main>
@@ -208,7 +219,7 @@ mod tests {
     fn page_groups_by_source_and_family() {
         let index = "aaaa\tFIRE_POTION01\t16x32\t0x81\nbbbb\tFIRE_POTION02\t16x32\t0x81\ncccc\tWIZ_HEAD\t16x16\t0x80\ndddd\tA<B\t256x64\t0xc\neeee\tbad\tline\n";
         let sources = "cccc\tcharacter\tWIZ_Y\naaaa\tlevel\tL1 The Tower\nbbbb\tlevel\tL1 The Tower\ncccc\tlevel\tL1 The Tower\n";
-        let html = page(index, sources, &|s| s == "cccc");
+        let html = page(index, sources, &|s| s == "cccc", &|_, l| if l == "WIZ_HEAD" { "skin".to_string() } else { "auto (guess)".to_string() });
         let at = |s: &str| html.find(s).unwrap_or_else(|| panic!("{s} missing"));
         assert!(at("<h2>Characters") < at("<h2>Levels") && at("<h2>Levels") < at("<h2>Source not recorded"));
         assert!(html.contains("FIRE_POTION <small>2 frames</small>"));
@@ -219,7 +230,8 @@ mod tests {
         // 16×32 zoomed ×4 into the 128 box; 256×64 fitted; flags 0xc clamp both.
         assert!(html.contains("src=\"aaaa.png\" width=\"64\" height=\"128\""));
         assert!(html.contains("src=\"dddd.png\" width=\"128\" height=\"32\""));
-        assert!(html.contains("256&times;64 &middot; edges clamped"));
+        assert!(html.contains("256&times;64 &middot; edges clamped<br><span class=\"surf\">surface: auto (guess)</span>"));
+        assert!(html.contains("data-k=\"wiz_head cccc skin\""));
         assert!(!html.contains("eeee"));
     }
 }

@@ -157,7 +157,8 @@ ground, grass, foliage, water, lava, ice, cloth and skin.
 
 1. **M1** Material types on today's textures: the table, the guesses, the
    review page, normal and roughness maps. No modelling needed, and it sets
-   the look direction early.
+   the look direction early. Built 2026-11-22 (decisions/0015), with a gem
+   type the owner asked for. The owner's playtest is next.
 2. **M2** Water shader on today's water.
 3. **M3** Foliage on today's plants: sway, edges, light through.
 4. **M4** Exporter: objects, level scenes and the collision layer, checked

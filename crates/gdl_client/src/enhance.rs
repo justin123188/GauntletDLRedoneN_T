@@ -95,13 +95,14 @@ enum GRow {
     Shadows,
     AmbientOcclusion,
     Bloom,
+    MaterialDetail,
     HdTextures,
     TexturePack,
     SaveTextures,
     Back,
 }
 
-const GRAPHICS: [GRow; 14] = [
+const GRAPHICS: [GRow; 15] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -112,6 +113,7 @@ const GRAPHICS: [GRow; 14] = [
     GRow::Shadows,
     GRow::AmbientOcclusion,
     GRow::Bloom,
+    GRow::MaterialDetail,
     GRow::HdTextures,
     GRow::TexturePack,
     GRow::SaveTextures,
@@ -308,6 +310,8 @@ impl Overlay {
                     GRow::Shadows => format!("Character shadows    {}", if s.shadows { "Shadow maps" } else { "Original" }),
                     GRow::AmbientOcclusion => format!("Ambient occlusion    {}", on(s.ambient_occlusion)),
                     GRow::Bloom => format!("Bloom                {}", on(s.bloom)),
+                    // NATIVE (this fork, decisions/0015).
+                    GRow::MaterialDetail => format!("Material detail      {}", on(s.material_detail)),
                     GRow::HdTextures => format!(
                         "HD textures          {}",
                         match (s.hd_textures, &self.hd) {
@@ -341,6 +345,10 @@ impl Overlay {
             if GRAPHICS.get(self.cursor) == Some(&GRow::SaveTextures) {
                 out.push("Save textures: textures loaded from now on go to texture_dump".to_string());
                 out.push("beside the game. Loading is slower meanwhile; off at next start.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::MaterialDetail) {
+                out.push("Material detail: bump and shine on stone, wood, metal and more,".to_string());
+                out.push("lit by torches, spells and the sun. Turned on, from the next level.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
@@ -558,6 +566,7 @@ impl Overlay {
                     GRow::Shadows => s.shadows = !s.shadows,
                     GRow::AmbientOcclusion => s.ambient_occlusion = !s.ambient_occlusion,
                     GRow::Bloom => s.bloom = !s.bloom,
+                    GRow::MaterialDetail => s.material_detail = !s.material_detail,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
                     GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
                     GRow::SaveTextures => return Effect::SaveTextures,

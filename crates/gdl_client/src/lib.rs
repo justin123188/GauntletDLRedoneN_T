@@ -10,6 +10,7 @@ pub mod font_page;
 pub mod glyphs;
 pub mod hd;
 pub mod hud_layout;
+pub mod material_maps;
 pub mod menu;
 pub mod movie;
 pub mod net;
@@ -182,10 +183,11 @@ impl Plugin for GsMaterialPlugin {
 /// NATIVE ENHANCEMENT switches every material reads (write_enhance;
 /// gs.wgsl PointLights.enhance, enhance2). The original presentation fills
 /// at most 8 slots (gdl_play present_point_lights); NATIVE ENHANCEMENT
-/// "more lights" all 32.
+/// "more lights" all 32. NATIVE (this fork, material_maps): last, the
+/// level's sun direction for material detail (write_sun).
 static POINT_LIGHTS: std::sync::OnceLock<Buffer> = std::sync::OnceLock::new();
 pub const MAX_POINT_LIGHTS: usize = 32;
-pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 32;
+pub const POINT_LIGHT_BYTES: u64 = (MAX_POINT_LIGHTS as u64) * 32 + 48;
 
 /// The shared point-light buffer (GsMaterialPlugin::finish creates it).
 pub fn point_light_buffer() -> Buffer {
@@ -222,6 +224,8 @@ pub struct Enhance {
     /// The sharp filter's level-of-detail bias (0 otherwise).
     pub lod_bias: f32,
     pub shadows: bool,
+    /// NATIVE (this fork, material_maps): the detail maps are drawn.
+    pub material_detail: bool,
 }
 
 /// Write the enhancement switches after the point lights.
@@ -232,9 +236,18 @@ pub fn write_enhance(queue: &RenderQueue, e: Enhance) {
     // the prepass normal, depth against the prepass, depth bands, the
     // lighting class); a value that is not a number means 1.
     let debug_ao = std::env::var("GDL_DEBUG_AO").ok().map_or(0.0, |v| v.parse::<f32>().unwrap_or(1.0));
-    let v = [b(e.sharp), b(e.full_colour), b(e.smooth_lightmaps), if e.sharp { e.lod_bias } else { 0.0 }, b(e.shadows), 0.0, 0.0, debug_ao];
+    let v = [b(e.sharp), b(e.full_colour), b(e.smooth_lightmaps), if e.sharp { e.lod_bias } else { 0.0 }, b(e.shadows), b(e.material_detail), 0.0, debug_ao];
     let bytes: Vec<u8> = v.iter().flat_map(|c| c.to_le_bytes()).collect();
     queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32, &bytes);
+}
+
+/// NATIVE (this fork, material_maps): the level's light for material
+/// detail (gs.wgsl PointLights.sun): xyz towards it in render space, w its
+/// strength (0: no level, no sun highlights or bump shading).
+pub fn write_sun(queue: &RenderQueue, sun: Vec4) {
+    let Some(buffer) = POINT_LIGHTS.get() else { return };
+    let bytes: Vec<u8> = sun.to_array().iter().flat_map(|c| c.to_le_bytes()).collect();
+    queue.write_buffer(buffer, MAX_POINT_LIGHTS as u64 * 32 + 32, &bytes);
 }
 
 /// The final pass of the last camera: the frame holds GS display values
@@ -455,7 +468,7 @@ pub fn zmod_depth_factor(zmod: i16) -> f32 {
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 #[bind_group_data(GsDraw)]
 #[data(0, GsParams, binding_array(10))]
-#[bindless(index_table(range(0..8)))]
+#[bindless(index_table(range(0..10)))]
 pub struct GsMaterial {
     pub params: GsParams,
     /// Lit by the scene light (characters, items: no colours, no lightmap).
@@ -475,6 +488,12 @@ pub struct GsMaterial {
     /// The shared point-light buffer (point_light_buffer).
     #[storage(7, read_only, buffer, binding_array(11), visibility(fragment))]
     pub lights: Buffer,
+    /// NATIVE (this fork, material_maps): the detail map (normal,
+    /// roughness, metalness) on the base texture's UVs, drawn while
+    /// Settings::material_detail is on; GsParams depth.y is 1 when bound.
+    #[texture(8)]
+    #[sampler(9)]
+    pub detail: Option<Handle<Image>>,
     pub alpha_mode: AlphaMode,
     pub draw: GsDraw,
 }
@@ -564,6 +583,7 @@ impl GsMaterial {
             lightmap: None,
             overlay: None,
             lights: point_light_buffer(),
+            detail: None,
             alpha_mode,
             draw: GsDraw::default(),
         }
@@ -928,7 +948,7 @@ pub fn materials_for(
         if candidates.len() == 1 {
             label_index.entry(candidates[0].label.to_uppercase()).or_insert(bitmap.index as u16);
         }
-        let Some(PreparedTexture { width, height, levels, own_levels, class, name, applied }) = decoded else {
+        let Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, detail }) = decoded else {
             unresolved.push(bitmap.index);
             // A magenta placeholder image: texture modifiers (MBSetRomTexture /
             // MBCopyTexture) may later copy a decoded frame into this record.
@@ -945,6 +965,7 @@ pub fn materials_for(
                     lightmap: None,
                     overlay: None,
                     lights: point_light_buffer(),
+                    detail: None,
                     alpha_mode: AlphaMode::Blend,
                     draw: GsDraw { cull: true, ..default() },
                 }),
@@ -967,17 +988,32 @@ pub fn materials_for(
         if let Some(name) = name {
             texture_reload::register(image.id(), name, bitmap.width, bitmap.height, own_levels, class, applied.as_deref());
         }
+        // NATIVE (this fork, material_maps): the detail map; F5 makes it
+        // again when its inputs change.
+        let detail = detail.map(|(stem, d)| {
+            let handle = images.add(material_maps::image(&d, bitmap.flags));
+            material_maps::register(handle.id(), image.id(), stem, candidates[0].label.clone(), bitmap.flags, bitmap.width, d.inputs);
+            handle
+        });
+        let detailed = if detail.is_some() { 1.0 } else { 0.0 };
         labels.entry(candidates[0].label.to_uppercase()).or_insert_with(|| image.clone());
         record_images.insert(bitmap.index as u16, image.clone());
         base.insert(
             bitmap.index as u16,
             materials.add(GsMaterial {
-                params: GsParams { tint: Vec4::ONE, options: Vec4::new(1.0, 0.0, 0.0, 0.0), extra: Vec4::new(0.0, 0.0, 0.0, frame_writes()), ..default() },
+                params: GsParams {
+                    tint: Vec4::ONE,
+                    options: Vec4::new(1.0, 0.0, 0.0, 0.0),
+                    extra: Vec4::new(0.0, 0.0, 0.0, frame_writes()),
+                    depth: Vec4::new(0.0, detailed, 0.0, 0.0),
+                    ..default()
+                },
                 lit: false,
                 base: Some(image),
                 lightmap: None,
                 overlay: None,
                 lights: point_light_buffer(),
+                detail,
                 alpha_mode,
                 draw: GsDraw { cull: true, ..default() },
             }),
@@ -1024,6 +1060,10 @@ struct PreparedTexture {
     /// that replaced it, while a pack or dump is set.
     name: Option<String>,
     applied: Option<std::path::PathBuf>,
+    /// NATIVE (this fork, material_maps): the texture's name and its
+    /// detail map, while material detail is on (opaque and cut-out
+    /// textures).
+    detail: Option<(String, material_maps::Detail)>,
 }
 
 fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::objects::ObjectBitmap, label: &str, sharp: bool) -> Option<PreparedTexture> {
@@ -1061,10 +1101,19 @@ fn prepare_texture(table: &TextureTable, textures: &[u8], bitmap: &gdl_formats::
         2
     };
     let own_levels = levels.len() as u8;
+    // NATIVE (this fork, material_maps): the detail map of an opaque or
+    // cut-out texture, from level 0 as drawn (a replacement's), named by
+    // the disc's texels.
+    let detail = (material_maps::enabled() && class != 2).then(|| {
+        let stem = name.clone().unwrap_or_else(|| texture_pack::name(bitmap.width, bitmap.height, &levels[0]));
+        let source = material_maps::Source { name: &stem, label, width: width.into(), height: height.into(), rgba: &levels[0], record_width: bitmap.width.into(), flags: bitmap.flags };
+        let d = material_maps::make(&source);
+        (stem, d)
+    });
     // NATIVE ENHANCEMENT (texfilter, "sharp"): the chain continued to 1×1
     // and an anisotropic sampler; the original keeps these levels.
     let levels = texfilter::with_chain(width.into(), height.into(), levels, sharp);
-    Some(PreparedTexture { width, height, levels, own_levels, class, name, applied })
+    Some(PreparedTexture { width, height, levels, own_levels, class, name, applied, detail })
 }
 
 /// prepare_texture for every record (lightmaps and records without a

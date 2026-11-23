@@ -284,6 +284,9 @@ later. And effects look better mostly through their textures.
    - Plan: docs/remaster/models-plan.md (2026-11-22). The owner chose
      materials first, the game's light as the base with live light on top,
      "an evolution of the game's core look", and optional extra grass.
+   - M1, material detail: built 2026-11-22 (decisions/0015; F10 →
+     Graphics → Material detail; surface types in texture_pack\materials.tsv,
+     guessed from the labels, gems included).
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
@@ -339,4 +342,6 @@ memory. The port stays the base.
       2026-11-22, "that's pretty good!".
 - [x] Sharper fonts (decisions/0013): the owner's playtest 2026-11-22 with
       Palatino Bold as 8HIFONTS, "Confirmed working and I like it".
+- [ ] Material detail (decisions/0015): built 2026-11-22; the owner's
+      playtest next (the Tower's stone walls show it most).
 - [ ] Camera follow-ups (§3) as the owner asks.

@@ -96,6 +96,17 @@ shader switches ride in the shared point-light buffer (gs.wgsl
 PointLights.enhance, lib.rs write_enhance), so turning one on re-prepares no
 material.
 
+NATIVE (this fork, decisions/0015): material detail.
+- **The map.** GsMaterial's binding 8/9 is a detail map (normal, roughness,
+  metalness on the base UVs; GsParams depth.y 1 when bound). The bindless
+  index table now spans 0..10, and gs_prepass.wgsl's GsBindings has the
+  two slots too.
+- **The light.** PointLights gained `sun`, the level's light direction
+  (lib.rs write_sun from present_scene_light). The buffer is 32 × 32 + 48
+  bytes.
+- **Off.** With the switch off (enhance2.y 0) or no map bound, every path
+  computes what it did before: frames are pixel-identical.
+
 ## Verification
 
 - Actual disc: the decoded lightmaps equal the dump's uploads (12/12); the

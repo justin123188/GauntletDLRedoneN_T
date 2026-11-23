@@ -39,6 +39,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | bloom | true | false | bloom around glows brighter than full white |
 | smaa | false | false | anti-aliasing by SMAA instead of MSAA (the main page's anti-aliasing row) |
 | hd_textures | false | false | the generated 4× texture pack; turning it on generates the pack once; outside the presets, Original turns it off |
+| material_detail | true | false | NATIVE (this fork): bump and shine maps on the opaque and cut-out textures, lit by the point, torch and level lights; made as a level loads (Material detail, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -611,6 +612,33 @@ retail-derived ships.
   found no texel with GS alpha above 0x80 as the client decodes them, so
   the pack's PNG alpha (up to 0x80) loses no glow brightness.
 
+### Material detail (this fork, 2026-11-22)
+
+decisions/0015-material-detail.md; the model phase's first step
+(docs/remaster/models-plan.md M1). gdl_client::material_maps gives every
+opaque and cut-out base texture a surface type (from
+`texture_pack\materials.tsv`, else guessed from its TEXDEF label) and a
+detail map: normal, roughness and metalness in one RGBA8 image on the
+base UVs. It is made from the pack's `_n`/`_h`/`_r`/`_m` files where they
+exist and from the texture's own brightness, scaled by its spread, where
+they do not.
+- **Shading.** gs.wgsl builds the tangent frame from screen-space
+  derivatives, so the meshes are unchanged. The baked light is shaded by
+  the detail normal's tilt towards the level's light, and the live lights
+  by the same tilt around their original falloff, so a surface's mean
+  light is kept. Blinn-Phong highlights come from every light (metals
+  tinted by their texture).
+- **Turning it on and off.** The setting turns the drawing on and off live
+  (PointLights enhance2.y). Maps are made only while it is on, at texture
+  preparation.
+- **Measured.**
+  - Off, frames are pixel-identical to the build before, and the baseline's
+    too.
+  - In the Tower the walls by the braziers gain relief with the same mean
+    brightness.
+  - At 2560×1440 the median frame takes +0.16 ms (5.40 → 5.56, uncapped).
+  - G1 loads 0.1 s slower.
+
 ## Settings overlay and keys
 
 F10, or the options lists' NATIVE last entry "Display" (title Options,
@@ -830,6 +858,14 @@ effect packages 105, shared packages 1826 (WEAPONS 827, POWERUPS 406,
 ITEMS_G 190, STATIC 131, the monsters), HUD sets 16. TEXDEF labels read
 as names: YEL_SOR_FACE, WIZ_HEAD_Y00, BARN_WALL, FIRE_POTION08 (a frame:
 the trailing number).
+
+Material detail (decisions/0015) reads the same folder:
+- `materials.tsv`, a texture's surface type (`<name> <type> [bump=…
+  rough=… metal=…]`);
+- the map files beside a texture: `<name>_n.png`, `_h`, `_r` and `_m`.
+
+index.html shows each texture's type, guessed or from the table. F5
+reloads both.
 
 F5 in play (this fork, gdl_client::texture_reload, decisions/0009 "F5")
 swaps changed, new and removed replacements of the base textures
