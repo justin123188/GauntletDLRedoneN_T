@@ -98,13 +98,14 @@ enum GRow {
     MaterialDetail,
     Water,
     Plants,
+    GemGlow,
     HdTextures,
     TexturePack,
     SaveTextures,
     Back,
 }
 
-const GRAPHICS: [GRow; 17] = [
+const GRAPHICS: [GRow; 18] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -118,6 +119,7 @@ const GRAPHICS: [GRow; 17] = [
     GRow::MaterialDetail,
     GRow::Water,
     GRow::Plants,
+    GRow::GemGlow,
     GRow::HdTextures,
     GRow::TexturePack,
     GRow::SaveTextures,
@@ -320,6 +322,8 @@ impl Overlay {
                     GRow::Water => format!("Water effects        {}", on(s.water_effects)),
                     // NATIVE (this fork, decisions/0017).
                     GRow::Plants => format!("Plant effects        {}", on(s.plant_effects)),
+                    // NATIVE (this fork, decisions/0018).
+                    GRow::GemGlow => format!("Gem glow             {}", on(s.gem_glow)),
                     GRow::HdTextures => format!(
                         "HD textures          {}",
                         match (s.hd_textures, &self.hd) {
@@ -365,6 +369,10 @@ impl Overlay {
             if GRAPHICS.get(self.cursor) == Some(&GRow::Plants) {
                 out.push("Plant effects: leaves, moss and grass sway in the wind; torches and".to_string());
                 out.push("spells shine through leaves. Turned on, from the next level.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::GemGlow) {
+                out.push("Gem glow: crystals, runestones and gargoyle items glow softly in their".to_string());
+                out.push("colour, and flare while their pickup sparkle plays.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
@@ -585,6 +593,7 @@ impl Overlay {
                     GRow::MaterialDetail => s.material_detail = !s.material_detail,
                     GRow::Water => s.water_effects = !s.water_effects,
                     GRow::Plants => s.plant_effects = !s.plant_effects,
+                    GRow::GemGlow => s.gem_glow = !s.gem_glow,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
                     GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
                     GRow::SaveTextures => return Effect::SaveTextures,

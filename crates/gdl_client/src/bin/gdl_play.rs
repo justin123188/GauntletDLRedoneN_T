@@ -28,7 +28,7 @@
 use bevy::{core_pipeline::tonemapping::Tonemapping, ecs::system::RunSystemOnce, ecs::world::World as EcsWorld, prelude::*, sprite::Anchor};
 use gdl_client::menu::{Action, Entry, Key, Menu};
 use gdl_core::{
-    game::{effects::Visual, pad::PadStatus, pickups::ClassData, profile, record::Record, setup, Event, Game},
+    game::{effects::{fx, Visual}, pad::PadStatus, pickups::ClassData, profile, record::Record, setup, Event, Game},
     player_class::ClassTables,
     save::SaveStore,
 };
@@ -2418,6 +2418,10 @@ struct MatReq {
     color: Option<Vec3>,
     /// MBTreeSetAmbientAdd / 255.
     ambient: f32,
+    /// NATIVE (this fork, decisions/0018): a brightening like `ambient`
+    /// that keeps the part's own alpha mode (the gem glow: an opaque crystal
+    /// blended by `ambient` lost its crisp edge).
+    glow: f32,
     /// ProcessItems' type-10 hit flash with MBTreeSetFlags 0x4000: no
     /// lightmap, and the colour 128 × (1 + add) without the vertex colours
     /// (the reference's flash is the texture's own colour; gs.wgsl
@@ -2739,10 +2743,11 @@ fn apply_material_requests(
         };
         let flat = r.as_ref().is_some_and(|r| r.flat);
         let zmod = r.as_ref().map_or(0, |r| r.zmod);
-        // Requests that blend an opaque part (a Z modifier alone keeps the
-        // part's own alpha mode).
+        let glow = r.as_ref().map_or(0.0, |r| r.glow);
+        // Requests that blend an opaque part (a Z modifier or a glow alone
+        // keeps the part's own alpha mode).
         let styled = !(image.is_none() && overlay.is_none() && 0.999 <= alpha && ambient == 0.0 && !flat && r.as_ref().is_none_or(|r| r.uv.is_none() && r.color.is_none()));
-        if !styled && zmod == 0 {
+        if !styled && zmod == 0 && glow == 0.0 {
             if ov.is_some() {
                 m.0 = base;
                 commands.entity(e).remove::<MatOverride>();
@@ -2793,9 +2798,9 @@ fn apply_material_requests(
                 p.tint = (b.params.tint.truncate() * c).extend(p.tint.w);
             }
             if b.lit {
-                p.scale.y += ambient;
+                p.scale.y += ambient + glow;
             } else {
-                p.scale.x += ambient;
+                p.scale.x += ambient + glow;
             }
             // The hit flash: no lightmap (node flag 0x4000), flat colour.
             let (lightmap, lit) = if flat {
@@ -3086,6 +3091,139 @@ fn present_scene_light(
     }
 }
 
+/// NATIVE (this fork, decisions/0018): the gems' glow. Crystals (pickup
+/// subtype 0xf), runestones (10) and gargoyle items (0x10) — the pickups
+/// whose StartGemFX sparkle plays when they are taken — glow while they lie
+/// in the level: a small point light in their colour (their textures' mean,
+/// as the torch lights take theirs) and the gem itself brightened (an
+/// ambient add, as MBTreeSetAmbientAdd). While a gem sparkle plays
+/// (EffectHeaders 0x45..0x4f, StartGemFX), its light flares: it rises over
+/// the first quarter (the particles forming) and falls to nothing by the
+/// end (as they fade). Presentation only: the simulation is not read back.
+#[derive(Resource, Default)]
+struct GemGlow {
+    /// Point lights for present_point_lights ([x, y, z, radius, r, g, b,
+    /// attenuation], render space).
+    lights: Vec<[f32; 8]>,
+    /// Each gem's colour by item slot (with its definition, its place):
+    /// the pickup's flare takes the colour of the gem last seen there.
+    seen: HashMap<usize, (usize, Vec3, Vec3)>,
+}
+
+/// NATIVE values chosen by eye: a resting gem's light reach and
+/// attenuation, its strength, the flare's extra strength and reach at its
+/// peak, and the gem's own brightening (ambient add / 255).
+const GEM_RADIUS: f32 = 5.0;
+const GEM_ATTENUATION: f32 = 0.35;
+const GEM_REST: f32 = 1.2;
+const GEM_FLARE: f32 = 3.0;
+const GEM_FLARE_REACH: f32 = 1.0;
+const GEM_AMBIENT: f32 = 0.6;
+
+fn is_gem(d: &gdl_core::items::Definition) -> bool {
+    d.kind() == 1 && matches!(d.subtype(), 0xf | 10 | 0x10)
+}
+
+/// The flare's strength at `t` of its effect's time (0..1).
+fn gem_flare(t: f32) -> f32 {
+    let s = |x: f32| {
+        let x = x.clamp(0.0, 1.0);
+        x * x * (3.0 - 2.0 * x)
+    };
+    if t < 0.25 { s(t / 0.25) } else { 1.0 - s((t - 0.25) / 0.75) }
+}
+
+/// The colour of a gem's meshes: the most saturated of their textures'
+/// colours (a white sheen part does not wash out a red crystal).
+fn gem_colour(meshes: &[Handle<gdl_client::GsMaterial>], materials: &Assets<gdl_client::GsMaterial>, images: &Assets<Image>) -> Option<Vec3> {
+    meshes
+        .iter()
+        .filter_map(|m| materials.get(m)?.base.as_ref().and_then(|b| images.get(b)).and_then(light_colour))
+        .max_by(|a, b| (a.max_element() - a.min_element()).total_cmp(&(b.max_element() - b.min_element())))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn present_gem_glow(
+    sim: Res<Sim>,
+    settings: Res<gdl_client::settings::Settings>,
+    slots: Query<(&Slot, &Children, &Visibility)>,
+    children: Query<&Children>,
+    mats: Query<&MeshMaterial3d<gdl_client::GsMaterial>>,
+    (materials, images): (Res<Assets<gdl_client::GsMaterial>>, Res<Assets<Image>>),
+    mut glow: ResMut<GemGlow>,
+    mut req: ResMut<MatRequests>,
+) {
+    glow.lights.clear();
+    if !settings.gem_glow {
+        glow.seen.clear();
+        return;
+    }
+    let g = &sim.game;
+    for (slot, kids, vis) in &slots {
+        // Only items present_world draws (a chest's closed content, a
+        // hidden Tower crystal and the like are not lit).
+        if slot.kind != SlotKind::Item || *vis == Visibility::Hidden {
+            continue;
+        }
+        let Some(r) = g.items.records.get(slot.index) else { continue };
+        let d = &g.items.definitions[r.definition()];
+        // Drawn as present_world draws items (0x800: a Tower crystal still
+        // hidden; +0xe1: hidden for this player count).
+        if !is_gem(d) || !r.active() || r.u16_(0xd8) & 0x8900 != 0 || r.u8_(0xe1) != 0 {
+            continue;
+        }
+        let mut stack: Vec<Entity> = kids.iter().collect();
+        let mut meshes = Vec::new();
+        while let Some(e) = stack.pop() {
+            if let Ok(m) = mats.get(e) {
+                meshes.push((e, m.0.clone()));
+            }
+            if let Ok(c) = children.get(e) {
+                stack.extend(c.iter());
+            }
+        }
+        if meshes.is_empty() {
+            continue;
+        }
+        let p = (Vec3::from_array(r.position()) + Vec3::Y * 0.5) * MIRROR;
+        let colour = match glow.seen.get(&slot.index) {
+            Some(&(def, _, c)) if def == r.definition() => c,
+            _ => {
+                let handles: Vec<_> = meshes.iter().map(|(_, h)| h.clone()).collect();
+                match gem_colour(&handles, &materials, &images) {
+                    Some(c) => c,
+                    None => continue,
+                }
+            }
+        };
+        glow.seen.insert(slot.index, (r.definition(), p, colour));
+        for (e, _) in &meshes {
+            req.get(*e).glow += GEM_AMBIENT;
+        }
+        let c = colour * GEM_REST;
+        glow.lights.push([p.x, p.y, p.z, GEM_RADIUS, c.x, c.y, c.z, GEM_ATTENUATION]);
+    }
+    // The pickup sparkles (StartGemFX: EffectHeaders 0x45 + crystal, 0x4e
+    // gargoyle items, 0x4f runes) at the gem's place.
+    let atime = g.globals.atime;
+    for (i, n) in g.effects.nodes.iter().enumerate() {
+        let Some(n) = n else { continue };
+        let Visual::Header(h) = n.visual else { continue };
+        if !(0x45..=0x4f).contains(&h) {
+            continue;
+        }
+        let duration = g.effects.slots[i].f32_(fx::DURATION);
+        if duration <= 0.0 {
+            continue;
+        }
+        let k = gem_flare((atime - n.start) / duration);
+        let p = (Vec3::from_array(n.position) + Vec3::Y * 0.5) * MIRROR;
+        let colour = glow.seen.values().filter(|(_, q, _)| q.distance(p) < 3.0).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p))).map_or(Vec3::ONE, |&(_, _, c)| c);
+        let c = colour * (GEM_REST + GEM_FLARE * k);
+        glow.lights.push([p.x, p.y, p.z, GEM_RADIUS * (1.0 + GEM_FLARE_REACH * k), c.x, c.y, c.z, GEM_ATTENUATION]);
+    }
+}
+
 /// NATIVE (this fork, decisions/0016): the water's clock, written every
 /// frame. It follows the stepped updates (30 a second) and moves smoothly
 /// between them for at most one update's time, so it stops when the game
@@ -3117,6 +3255,7 @@ fn present_point_lights(
     queue: Res<bevy::render::renderer::RenderQueue>,
     cams: Query<&bevy::camera::primitives::Frustum, With<FollowCamera>>,
     emitters: Query<&Emitter>,
+    gem_glow: Res<GemGlow>,
 ) {
     let g = &sim.game;
     let mut lights: Vec<[f32; 8]> = Vec::new();
@@ -3153,6 +3292,11 @@ fn present_point_lights(
     by_eye(&mut lights);
     let limit = if settings.more_lights { gdl_client::MAX_POINT_LIGHTS } else { 8 };
     lights.truncate(limit);
+    // NATIVE (this fork, decisions/0018): the gems' glow and pickup flares
+    // (present_gem_glow, the frame before), after the game's lights.
+    let mut gems: Vec<[f32; 8]> = gem_glow.lights.iter().copied().filter(in_view).collect();
+    by_eye(&mut gems);
+    lights.extend(gems.into_iter().take(limit - lights.len()));
     // NATIVE ENHANCEMENT (Settings::torch_lights): the level's fires after
     // the game's lights.
     if settings.torch_lights {
@@ -12243,6 +12387,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .init_resource::<NodeVariants>()
         .init_resource::<MeshSpawnOrder>()
         .init_resource::<MatRequests>()
+        .init_resource::<GemGlow>()
         .init_resource::<PendingTreePsys>()
         .init_resource::<ChestNodes>()
         .init_resource::<ItemSlots>()
@@ -12318,7 +12463,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 play_menu_cues,
                 run_attract,
                 ps2_viewport,
-                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_water_clock, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
+                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_water_clock, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, present_gem_glow, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
                 front_text,
                 present_hud,
                 present_menu_icon,
@@ -12809,6 +12954,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// NATIVE (this fork, decisions/0018): the pickup flare rises over the
+    /// first quarter of the sparkle and falls to nothing by its end.
+    #[test]
+    fn gem_flare_rises_then_fades() {
+        assert_eq!(gem_flare(0.0), 0.0);
+        assert!(0.4 < gem_flare(0.125) && gem_flare(0.125) < 0.6);
+        assert_eq!(gem_flare(0.25), 1.0);
+        assert!(gem_flare(0.6) < 1.0 && 0.0 < gem_flare(0.6));
+        assert_eq!(gem_flare(1.0), 0.0);
+        assert_eq!(gem_flare(2.0), 0.0);
+        let mut last = 1.0;
+        for k in 26..=100 {
+            let v = gem_flare(k as f32 / 100.0);
+            assert!(v <= last, "{k}");
+            last = v;
+        }
+    }
 
     /// NATIVE (this fork, decisions/0012): a controller's buttons in play
     /// follow Settings::pad; elsewhere (`remap` false) the standard layout.

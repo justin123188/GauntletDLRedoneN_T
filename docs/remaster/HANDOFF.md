@@ -291,8 +291,10 @@ later. And effects look better mostly through their textures.
      Graphics → Water effects; C1's channels show it well).
    - M3, plant effects: built 2026-11-22 (decisions/0017; F10 →
      Graphics → Plant effects; G1's moss and grass).
-   - Next, the owner's idea (2026-11-22): a soft glow on gemstones that
-     brightens while their pickup particles form and dims as they fade.
+   - The owner's idea, a gem glow: built 2026-11-22 (decisions/0018; F10
+     → Graphics → Gem glow). Crystals, runes and gargoyle items glow in
+     their colour and flare while their pickup sparkle plays. Part of
+     item 3, effects.
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
@@ -353,6 +355,8 @@ memory. The port stays the base.
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
       "Looks good". G1's swamp fixed afterwards (decisions/0017): it
       needs a look in play.
+- [ ] Gem glow (decisions/0018): built 2026-11-22; the owner's playtest
+      next (the pickup flare was not seen in test frames).
 - [x] Plant effects (decisions/0017): the owner's playtest 2026-11-22.
       Moss, bushes and corn sway; G1's ground grass clumps do not, and
       the owner wants them replaced in the vegetation overhaul instead.

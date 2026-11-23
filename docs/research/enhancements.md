@@ -42,6 +42,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | material_detail | true | false | NATIVE (this fork): bump and shine maps on the opaque and cut-out textures, lit by the point, torch and level lights; made as a level loads (Material detail, below) |
 | water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
 | plant_effects | true | false | NATIVE (this fork): leaves, moss and grass sway; point lights shine through leaves; marked as a level loads (Plant effects, below) |
+| gem_glow | true | false | NATIVE (this fork): crystals, runestones and gargoyle items glow in their colour and flare while their pickup sparkle plays (Gem glow, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -675,6 +676,18 @@ decisions/0017-plants.md; models-plan.md M3.
 - **Light.** Point lights behind a leaf shine through it at 0.6.
 - **Soft edges.** Softer cut-out edges (alpha to coverage) wait: they need
   MSAA, which ambient occlusion turns off.
+
+### Gem glow (this fork, 2026-11-22)
+
+decisions/0018-gem-glow.md.
+- **The glow.** Crystals, runestones and gargoyle items lying in the level
+  get a point light in their texture's colour, and the gem itself is
+  brightened.
+- **The flare.** While the StartGemFX sparkle plays (EffectHeaders
+  0x45..0x4f), the light flares: it rises over the first quarter and fades
+  to nothing at the end.
+- **How.** gdl_play present_gem_glow feeds present_point_lights. A MatReq
+  `glow` brightens the gem without blending it.
 
 ## Settings overlay and keys
 

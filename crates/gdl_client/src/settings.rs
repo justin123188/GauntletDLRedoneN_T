@@ -94,6 +94,10 @@ pub struct Settings {
     /// the wind, and the point lights shine through leaves. Marked as a
     /// level loads.
     pub plant_effects: bool,
+    /// NATIVE (this fork, decisions/0018): crystals, runestones and
+    /// gargoyle items glow softly in their colour while they lie in the
+    /// level, and flare while their pickup sparkle plays.
+    pub gem_glow: bool,
     /// Anti-aliasing by SMAA (a post-process) instead of MSAA.
     pub smaa: bool,
     /// The generated HD textures (hd::generate: 4× Real-ESRGAN; effects
@@ -163,6 +167,7 @@ impl Default for Settings {
             material_detail: true,
             water_effects: true,
             plant_effects: true,
+            gem_glow: true,
             smaa: false,
             hd_textures: false,
             // This fork is a remaster: the free camera is the default; the
@@ -263,6 +268,7 @@ impl Settings {
                 material_detail: false,
                 water_effects: false,
                 plant_effects: false,
+                gem_glow: false,
                 hd_textures: false,
                 ..self.clone()
             },
@@ -279,6 +285,7 @@ impl Settings {
                 material_detail: true,
                 water_effects: true,
                 plant_effects: true,
+                gem_glow: true,
                 ..self.clone()
             },
             Graphics::Custom => self.clone(),
@@ -372,14 +379,14 @@ mod tests {
         assert_eq!(serde_json::from_str::<Settings>(r#"{"msaa": 2}"#).unwrap().graphics(), Graphics::Enhanced);
         let e = s.with_graphics(Graphics::Original).with_graphics(Graphics::Enhanced);
         assert_eq!(e.graphics(), Graphics::Enhanced);
-        assert!(e.texture_filter == TextureFilter::Sharp && e.full_colour && e.smooth_lightmaps && 0 < e.sharpen && e.more_lights && e.torch_lights && e.shadows && e.ambient_occlusion && e.bloom && e.material_detail && e.water_effects && e.plant_effects);
+        assert!(e.texture_filter == TextureFilter::Sharp && e.full_colour && e.smooth_lightmaps && 0 < e.sharpen && e.more_lights && e.torch_lights && e.shadows && e.ambient_occlusion && e.bloom && e.material_detail && e.water_effects && e.plant_effects && e.gem_glow);
         let c = Settings { sharpen: 80, ..e.clone() };
         assert_eq!(c.graphics(), Graphics::Custom);
         // The original presentation turns every graphics enhancement off.
         assert_eq!(c.with_baseline_presentation().graphics(), Graphics::Original);
         assert_eq!(Settings::baseline().graphics(), Graphics::Original);
         let b = Settings::baseline();
-        assert!(!b.more_lights && !b.torch_lights && !b.shadows && !b.ambient_occlusion && !b.bloom && !b.smaa && !b.hd_textures && !b.material_detail && !b.water_effects && !b.plant_effects);
+        assert!(!b.more_lights && !b.torch_lights && !b.shadows && !b.ambient_occlusion && !b.bloom && !b.smaa && !b.hd_textures && !b.material_detail && !b.water_effects && !b.plant_effects && !b.gem_glow);
         // HD textures: off by default, outside the presets (Enhanced keeps
         // them as they are), off with Original.
         assert!(!Settings::default().hd_textures);
