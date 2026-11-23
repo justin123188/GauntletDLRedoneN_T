@@ -281,6 +281,9 @@ later. And effects look better mostly through their textures.
    - Camera recentre and tilt: done 2026-11-22 (decisions/0014; the right
      stick click, tilt with the zoom). Maybe mouse camera later.
 2. **Models:** a replacement system.
+   - Plan: docs/remaster/models-plan.md (2026-11-22). The owner chose
+     materials first, the game's light as the base with live light on top,
+     "an evolution of the game's core look", and optional extra grass.
    - Export the originals to glTF with skeletons; there is a scene glTF
      exporter for research.
    - Load replacements keyed to the original model packages.
