@@ -693,8 +693,8 @@ decisions/0018-gem-glow.md.
   in their bottle's colour (the magic's own light colour, start_magic's
   light_color[mclr_idx[colour]], lights a blue potion white). They have
   no pickup sparkle: the flare starts as the potion's record expires
-  (+0xd8 0x100, GrabPowerup) and lasts as long as the rune's sparkle
-  (EffectHeaders 0x4f, one second). GDL_DEBUG_GLOW=1 lists the glowing
+  (+0xd8 0x100, GrabPowerup) and lasts 0.75 s (the owner's choice; first
+  the rune sparkle's one second). GDL_DEBUG_GLOW=1 lists the glowing
   items and the flares.
 
 ## Settings overlay and keys

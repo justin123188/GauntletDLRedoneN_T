@@ -298,8 +298,8 @@ later. And effects look better mostly through their textures.
    - The owner's request, the same glow for magic potions: built
      2026-11-22 (decisions/0019; F10 → Graphics → Gem and potion glow).
      Potions glow in their bottle's colour; with no pickup sparkle of
-     their own, they flare from the pickup for the rune sparkle's length
-     (one second).
+     their own, they flare from the pickup for 0.75 s (the owner's
+     playtest: one second was a little long).
    - Next: the model phase's M4, the Blender exporter (offered; the owner
      asked for the potion glow first).
    - Export the originals to glTF with skeletons; there is a scene glTF
@@ -362,8 +362,8 @@ memory. The port stays the base.
 - [x] Water effects (decisions/0016): the owner's playtest 2026-11-22,
       "Looks good". G1's swamp fixed afterwards (decisions/0017): it
       needs a look in play.
-- [ ] Potion glow (decisions/0019): built 2026-11-22; the owner's
-      playtest next.
+- [ ] Potion glow (decisions/0019): the owner's playtest 2026-11-22
+      asked for a shorter flare, now 0.75 s; that build's playtest next.
 - [x] Gem glow (decisions/0018): the owner's playtest 2026-11-22, "Looks
       good".
 - [x] Plant effects (decisions/0017): the owner's playtest 2026-11-22.

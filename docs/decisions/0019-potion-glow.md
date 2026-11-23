@@ -40,14 +40,17 @@ Original preset):
   tried first: it lights a blue potion white.
 - **The flare.** It starts when the potion's record starts expiring
   (+0xd8 0x100: GrabPowerup's ExpireItem, so only a pickup), at the place
-  it was last drawn, once per pickup. It lasts as long as the rune's
-  pickup sparkle (EffectHeaders 0x4f, timed as StartFXTree times a tree:
-  frames × timing × 0x3a91a2aa, about 1/900; one second if the header is
-  missing), on ATime, so it stops when the game pauses. Its strength and
-  reach follow the gems' envelope (gem_flare: up over the first quarter,
-  down to nothing at the end). The headers read in G1: 0x4f 30 × 30, one
-  second; the crystals' 0x46..0x4c 45 × 30 (1.5 s), 0x45 7 × 30, the
-  gargoyle items' 0x4e 20 × 30.
+  it was last drawn, once per pickup. It lasts 0.75 s of ATime
+  (POTION_FLARE, the owner's choice), so it stops when the game pauses.
+  Its strength and reach follow the gems' envelope (gem_flare: up over
+  the first quarter, down to nothing at the end).
+  - First built as long as the rune's pickup sparkle (EffectHeaders 0x4f,
+    timed as StartFXTree times a tree: frames × timing × 0x3a91a2aa,
+    about 1/900). The headers read in G1: 0x4f 30 × 30, one second; the
+    crystals' 0x46..0x4c 45 × 30 (1.5 s), 0x45 7 × 30, the gargoyle
+    items' 0x4e 20 × 30.
+  - The owner's playtest of that (2026-11-22, the build of 60298c3):
+    "Maybe slightly shorter in length try .75 seconds".
 - **The setting.** F10 → Graphics → "Gem and potion glow" (the same
   switch, renamed). The settings file keeps `gem_glow`.
 - **Unchanged.** The simulation, which is only read. A potion destroyed
@@ -67,8 +70,8 @@ APPDATA, GDL_NO_GAMEPADS):
   freeze at 300): the bottle brighter and the leaves and ground around it
   lit yellow; off, only the game's own halo on the bottle.
 - **The flare.** G1, chest-g1's teleports (the key, then chest 31): the
-  log shows "potion item 305 taken at ATime 82.33: a flare of 1.00 s".
-  Not looked at in frames.
+  log shows "potion item 305 taken at ATime 82.33: a flare of 1.00 s",
+  and "… of 0.75 s" after the change. Not looked at in frames.
 - **Off is unchanged.** With material detail, water, plant effects and
   gem glow off, frames are pixel-identical to the build of 5b4d6b9 in G1
   (frame 3000 after a freeze at 300) and C1 (start). The GDL_BASELINE=1
@@ -76,4 +79,18 @@ APPDATA, GDL_NO_GAMEPADS):
   of the same build, 24148 pixels; the new build equals the second.)
 - **Game logic.** Simulation hashes over 600 updates of the G1 walk equal
   the reference, with the defaults and with GDL_BASELINE=1.
-- **The owner's playtest:** next.
+- **After the change to 0.75 s:** simulation hashes equal the reference
+  (defaults and GDL_BASELINE=1); the GDL_BASELINE=1 G1 frame is
+  identical to 5b4d6b9; with the four effects off, the G1 frame is
+  identical to 5b4d6b9 in some runs.
+- **A frame that varies from run to run** (found here, not caused by the
+  glow, whose code returns at once when it is off): with the four effects
+  off, the frame comes out in one of two fixed states. C1 start: two runs
+  of 5b4d6b9 differ by 24148 pixels. G1 frame 3000: the 60298c3 and 0.75 s
+  builds gave a 14174-pixel variant (small differences on edges and
+  characters, nothing moved) in three runs and the 5b4d6b9 frame exactly in
+  two; 5b4d6b9 and the earlier backups gave the 5b4d6b9 frame in each run.
+  Within a run, frames 1500..3500 after the freeze are the same. The
+  cause is not found yet.
+- **The owner's playtest:** of the 1 s flare, shorter (above); of the
+  0.75 s flare, next.

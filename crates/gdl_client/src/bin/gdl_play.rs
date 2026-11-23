@@ -3101,8 +3101,8 @@ fn present_scene_light(
 /// the first quarter (the particles forming) and falls to nothing by the
 /// end (as they fade). Magic potions (pickup subtype 4, decisions/0019)
 /// glow the same way in their bottle's colour; they have no pickup
-/// sparkle, so their flare starts as they are taken and lasts as long as
-/// the rune's sparkle. Presentation only: the simulation is not read back.
+/// sparkle, so their flare starts as they are taken and lasts 0.75 s.
+/// Presentation only: the simulation is not read back.
 #[derive(Resource, Default)]
 struct GemGlow {
     /// Point lights for present_point_lights ([x, y, z, radius, r, g, b,
@@ -3138,20 +3138,9 @@ fn is_potion(d: &gdl_core::items::Definition) -> bool {
     d.kind() == 1 && d.subtype() == 4
 }
 
-/// NATIVE (decisions/0019): a potion's flare lasts as long as the rune's
-/// pickup sparkle (EffectHeaders 0x4f, timed as StartFXTree times it:
-/// frames × timing × 0x3a91a2aa, about 1/900), one second without it.
-fn potion_flare_length(t: &gdl_core::game::effects::EffectTables) -> f32 {
-    t.headers
-        .get(0x4f)
-        .copied()
-        .flatten()
-        .map_or(1.0, |h| {
-            let frames = if h.frames == 0 { 0x1e } else { h.frames };
-            f32::from(frames) * f32::from(h.timing) * f32::from_bits(0x3a91_a2aa)
-        })
-        .max(0.1)
-}
+/// NATIVE (decisions/0019): a potion's flare length in seconds of ATime,
+/// the owner's choice after a playtest (first the rune sparkle's 1 s).
+const POTION_FLARE: f32 = 0.75;
 
 /// The flare's strength at `t` of its effect's time (0..1).
 fn gem_flare(t: f32) -> f32 {
@@ -3267,12 +3256,12 @@ fn present_gem_glow(
     // NATIVE (decisions/0019): a potion has no pickup sparkle. Its flare
     // starts as GrabPowerup takes it (ExpireItem: +0xd8 0x100; DeleteItem
     // follows a few updates later), at the place it was last drawn, and
-    // lasts as long as the rune's sparkle, with the gems' rise and fade.
+    // lasts POTION_FLARE, with the gems' rise and fade.
     let records = &g.items.records;
     let GemGlow { lights, seen, taken, flares } = &mut *glow;
     let expiring = |s: usize, def: usize| records.get(s).is_some_and(|r| r.definition() == def && r.active() && r.u16_(0xd8) & 0x100 != 0);
     taken.retain(|&s| records.get(s).is_some_and(|r| r.active() && r.u16_(0xd8) & 0x100 != 0));
-    let length = potion_flare_length(&g.effects.tables);
+    let length = POTION_FLARE;
     for (&s, &(def, p, c, gem)) in seen.iter() {
         if !gem && expiring(s, def) && taken.insert(s) {
             if debug {
