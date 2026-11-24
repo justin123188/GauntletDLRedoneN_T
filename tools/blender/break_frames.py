@@ -5,7 +5,7 @@ frame by frame.
 
     blender --background --factory-startup --python tools/blender/break_frames.py -- \
         ORIGINAL_DIR NEW.glb OUT_DIR FRAME... [--thickness T] [--keep-base 0|1] \
-        [--report FILE.json] [--preview DIR]
+        [--inside-from WOOD.glb] [--report FILE.json] [--preview DIR]
 
 ORIGINAL_DIR is the package's folder of the model export
 (objects/<package>); NEW.glb is the fitted whole model (the standing
@@ -42,8 +42,10 @@ The new model, in these steps:
 - each piece keeps its largest connected part; smaller parts go to the
   piece they share the longest border with;
 - each piece thickened inwards by T (default 3 % of the height), with
-  plain wood inside and on its broken edges (the new texture's middle
-  tones, darker, in streaks with stave seams; a second material);
+  plain wood inside and on its broken edges (the middle tones of the new
+  texture, or of WOOD.glb's for a painted model: G1's red and poison
+  barrels take the brown barrel's; darker, in streaks with stave seams; a
+  second material);
 - placed in each frame as its piece is (one glTF node per piece), never
   lower than the original's piece or the ground.
 With --preview, pictures of the original's and the new frames from one
@@ -56,6 +58,7 @@ import os
 import shutil
 import struct
 import sys
+import tempfile
 
 import bmesh
 import bpy
@@ -433,7 +436,7 @@ def triangle_samples(corners, steps=12):
 
 def parse_args():
     a = sys.argv[sys.argv.index('--') + 1:]
-    opts = {'thickness': -1.0, 'keep-base': 0, 'report': '', 'preview': ''}
+    opts = {'thickness': -1.0, 'keep-base': 0, 'inside-from': '', 'report': '', 'preview': ''}
     pos = []
     while a:
         k = a.pop(0)
@@ -756,6 +759,18 @@ def main():
     if outer:
         outer.use_backface_culling = True
     src = next((im for im in bpy.data.images if im.size[0] > 0), None)
+    if opts['inside-from']:
+        # Bare wood inside a painted model: another model's first texture.
+        doc, data = glb(opts['inside-from'])
+        img = next((i for i in doc.get('images', []) if i.get('mimeType') == 'image/png' and 'bufferView' in i), None)
+        if img is None:
+            raise SystemExit(f"{opts['inside-from']}: no embedded PNG")
+        v = doc['bufferViews'][img['bufferView']]
+        path = os.path.join(bpy.app.tempdir or tempfile.gettempdir(), 'inside-from.png')
+        with open(path, 'wb') as f:
+            f.write(data[v.get('byteOffset', 0):v.get('byteOffset', 0) + v['byteLength']])
+        src = bpy.data.images.load(path)  # Blender's temp folder, gone at exit
+        report['inside_from'] = opts['inside-from']
     if src:
         inner_img, wood = inside_image(src)
         report['inside_colour'] = np.round(wood, 3).tolist()

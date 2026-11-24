@@ -203,7 +203,9 @@ that one job.
    2026-11-24 (decisions/0023, tools/blender/break_frames.py: the fitted
    model cut into the original's pieces, each moved as the original's
    piece moves). Still to do: light taken over from the baked scenery
-   (option A), F5 and more of the owner's props.
+   (option A), F5 and more of the owner's props. The red and poison
+   barrels 2026-11-24 (decisions/0024: the owner's barrel painted as the
+   originals, tools/blender/recolour.py).
 6. **M6** Replacement ground for one level, with the collision checker.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.

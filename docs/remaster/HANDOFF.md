@@ -205,9 +205,18 @@ Commands (no window):
   model pack (decisions/0022).
 - `blender --background --factory-startup --python
   tools/blender/break_frames.py -- ORIGINAL_DIR NEW.glb OUT_DIR FRAME...
-  [--thickness T] [--keep-base 0|1] [--report F.json] [--preview DIR]`:
-  cuts a fitted model into the original's breaking pieces and writes a
-  model pack file per flip-book frame (decisions/0023).
+  [--thickness T] [--keep-base 0|1] [--inside-from WOOD.glb] [--report
+  F.json] [--preview DIR]`: cuts a fitted model into the original's
+  breaking pieces and writes a model pack file per flip-book frame
+  (decisions/0023; --inside-from for a painted model, decisions/0024).
+- `blender --background --factory-startup --python
+  tools/blender/recolour.py -- NEW.glb FROM.glb TO.glb OUT.glb [--report
+  F.json] [--preview DIR]`: paints a model pack file the way original TO
+  differs from original FROM, textures only (decisions/0024).
+- G1's red barrel: GDL_TEST_ACTIONS `[{"at": 200, "teleport": [-2.8,
+  25.45, -250.8]}, {"at": 260, "damage_item": [364, 1000]}]` stands the
+  player beside two red barrels and breaks 364 (363 follows); freeze at
+  updates 250 to 330.
 - `tools/windows/g1-smash-barrel.json` (GDL_INPUT_SCRIPT): the Sorceress
   breaks the barrel above G1's start at about update 111; freeze at
   updates 113 to 150 to see the break.
@@ -348,6 +357,9 @@ later. And effects look better mostly through their textures.
      tools/blender/break_frames.py cuts the fitted barrel into the
      original's ten pieces and moves each as the original's piece moves;
      the model pack shares one texture across the 26 files.
+   - The red and poison barrels (decisions/0024, 2026-11-24): the owner's
+     barrel painted as the originals are (tools/blender/recolour.py),
+     bare wood inside, the same break; checked with G1's red barrel.
    - Next (models-plan.md M5): more props, F5 reload, and light carried
      over from the baked scenery (option A).
    - Characters' skeletons come with M8.
@@ -449,3 +461,6 @@ memory. The port stays the base.
       2026-11-24; the owner's playtest in G1, "Looks good".
 - [ ] Breaking frames (decisions/0023): built and checked in G1
       2026-11-24; the owner's playtest next.
+- [ ] Red and poison barrels (decisions/0024): built 2026-11-24, the red
+      one checked in G1; the poison one not seen in play yet; the
+      owner's playtest next.
