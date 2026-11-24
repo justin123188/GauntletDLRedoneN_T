@@ -198,8 +198,10 @@ that one job.
    fallback. A handful of props on the first test level. First step
    built 2026-11-23 (decisions/0022): the model pack (by package and
    label, the fallback, live light) and tools/blender/fit_model.py,
-   tested with a stand-in barrel in G1. Still to do: light taken over
-   from the baked scenery (option A), F5 and the owner's props.
+   tested with a stand-in barrel in G1. The owner's barrel in the game
+   2026-11-24 (the owner's playtest: "Looks good"). Still to do: light
+   taken over from the baked scenery (option A), F5, the barrel's
+   breaking frames and more of the owner's props.
 6. **M6** Replacement ground for one level, with the collision checker.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.

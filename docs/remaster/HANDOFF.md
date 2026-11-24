@@ -332,10 +332,13 @@ later. And effects look better mostly through their textures.
      beside the game replaces that object; tools/blender/fit_model.py
      fits any model to the original. Tested with a Blender-made stand-in
      barrel in G1.
-   - Next: the owner's barrel (ChatGPT picture, then Meshy or Tripo,
-     the owner's choice), fitted and playtested. G1's barrel is a
-     flip-book of 26 objects; only the standing one is replaced at first
-     (models-plan.md M4).
+   - The owner's barrel (a ChatGPT picture, a free TRELLIS demo on
+     Hugging Face, fit_model.py's bake): in the owner's game 2026-11-24,
+     the owner's playtest "Looks good". G1's barrel is a flip-book of 26
+     objects; only the standing one is replaced so far (models-plan.md
+     M4).
+   - Next (models-plan.md M5): the barrel's breaking frames, more props,
+     F5 reload, and light carried over from the baked scenery (option A).
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
@@ -414,5 +417,5 @@ memory. The port stays the base.
 - [ ] Camera follow-ups (§3) as the owner asks.
 - [x] Model exporter (decisions/0021): built and checked in Blender 5.3.0
       2026-11-23.
-- [ ] Model pack (decisions/0022): built and tested with a stand-in
-      barrel 2026-11-23; the owner's barrel and playtest next.
+- [x] Model pack (decisions/0022): the owner's barrel installed
+      2026-11-24; the owner's playtest in G1, "Looks good".
