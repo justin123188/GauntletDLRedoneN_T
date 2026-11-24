@@ -359,6 +359,18 @@ later. And effects look better mostly through their textures.
      automate much of it.
 3. **Effects and particles:** mostly through textures first, then more or
    softer particles.
+   - Later, the owner's wishes (2026-11-24, "we can add physics later down
+     the road"): debris that answers the hit (the pieces of a replaced
+     breakable pushed away from the spell or blow that broke it, falling
+     and settling on the level's collision), remastered death animations
+     and bodies, and decals: blood of the right colour, scarring and
+     scorch marks from attacks and spells. All presentation only (NATIVE,
+     off in the baseline; the simulation never sees them). Not started.
+     Open: where the game keeps what hit an item and from where (DamageItem
+     callers); a physics library (Avian or Rapier; Bevy 0.18 support not
+     checked) or a small own solver (AGENTS.md rule 9: the owner decides a
+     new dependency); the cheap first step is the original's break turned
+     away from the hit and widened by its strength.
 4. **Gameplay changes:** behind a "Remastered rules" option, with original
    rules kept bit-identical. Note: network play needs identical settings on
    every machine.
