@@ -4,7 +4,7 @@ original object of the model export, and write it as a model pack file
 
     blender --background --factory-startup --python tools/blender/fit_model.py -- \
         ORIGINAL.glb NEW.glb OUT.glb [--triangles N] [--texture PX] [--yaw DEG] \
-        [--fit height|box] [--report FILE.json] [--preview DIR]
+        [--fit height|box] [--bake auto|on] [--report FILE.json] [--preview DIR]
 
 ORIGINAL.glb is the object's file from `gdl_play --export-models`
 (objects/<package>/<LABEL>.glb); OUT.glb goes to
@@ -14,7 +14,10 @@ model_pack/<package>/<LABEL>.glb beside the game. The steps:
 - scaled uniformly so its height matches the original's (--fit height,
   the default) or so it fits inside the original's box (--fit box);
 - centred over the original's centre and stood on the original's base;
-- reduced to at most --triangles triangles (default 3000);
+- with more than --triangles triangles (default 3000), or with --bake on:
+  a copy welded at its seams, reduced to that many triangles, given new
+  UVs, and the full model's base colour baked onto it (Cycles, the GPU
+  when it can) in a square --texture image;
 - every texture but the base colour removed, the base colour at most
   --texture pixels on its longer side (default 512) and written as PNG;
 - exported as glTF binary with positions, normals, one UV set and the
@@ -37,7 +40,7 @@ def parse_args():
     a = sys.argv[sys.argv.index('--') + 1:]
     if len(a) < 3:
         raise SystemExit(__doc__)
-    opts = {'triangles': 3000, 'texture': 512, 'yaw': 0.0, 'fit': 'height', 'report': '', 'preview': ''}
+    opts = {'triangles': 3000, 'texture': 512, 'yaw': 0.0, 'fit': 'height', 'bake': 'auto', 'report': '', 'preview': ''}
     original, new, out, rest = a[0], a[1], a[2], a[3:]
     while rest:
         key = rest.pop(0)
@@ -47,6 +50,8 @@ def parse_args():
         opts[key[2:]] = type(opts[key[2:]])(value)
     if opts['fit'] not in ('height', 'box'):
         raise SystemExit('--fit is height or box')
+    if opts['bake'] not in ('auto', 'on'):
+        raise SystemExit('--bake is auto or on')
     for f in (original, new):
         if os.path.getsize(f) > MAX_BYTES:
             raise SystemExit(f'{f} is larger than the size policy')
@@ -120,6 +125,92 @@ def base_colour_only(material):
             tree.nodes.remove(n)
 
 
+def gpu_cycles(scene):
+    """Cycles on the GPU when one is usable (OptiX, then CUDA), else the CPU."""
+    scene.render.engine = 'CYCLES'
+    try:
+        prefs = bpy.context.preferences.addons['cycles'].preferences
+        for kind in ('OPTIX', 'CUDA'):
+            prefs.compute_device_type = kind
+            prefs.get_devices()
+            devices = [d for d in prefs.devices if d.type == kind]
+            if devices:
+                for d in prefs.devices:
+                    d.use = d.type == kind
+                scene.cycles.device = 'GPU'
+                return kind
+    except Exception:
+        pass
+    scene.cycles.device = 'CPU'
+    return 'CPU'
+
+
+def select_only(objects, active):
+    for o in bpy.context.scene.objects:
+        o.select_set(o in objects)
+    bpy.context.view_layer.objects.active = active
+
+
+def baked_copy(high, opts, report):
+    """A reduced copy of `high` (welded at its seams, at most
+    opts['triangles'] triangles, smart-projected UVs) with the base colour
+    baked from `high` into a new square image; `high` is removed."""
+    scene = bpy.context.scene
+    lo, hi = bounds([high])
+    extent = max((hi - lo).length, 1e-6)
+    low = high.copy()
+    low.data = high.data.copy()
+    scene.collection.objects.link(low)
+    select_only([low], low)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=extent * 1e-5)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    have = triangles([low])
+    report['welded_triangles'] = have
+    if have > opts['triangles']:
+        mod = low.modifiers.new('fit', 'DECIMATE')
+        mod.ratio = opts['triangles'] / have
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    me = low.data
+    while me.uv_layers:
+        me.uv_layers.remove(me.uv_layers[0])
+    me.uv_layers.new(name='UVMap')
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.004)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(40))
+    except Exception:
+        bpy.ops.object.shade_smooth()
+    size = opts['texture']
+    img = bpy.data.images.new('baked', size, size, alpha=False)
+    mat = bpy.data.materials.new('baked')
+    mat.use_nodes = True
+    tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
+    tex.image = img
+    mat.node_tree.nodes.active = tex
+    me.materials.clear()
+    me.materials.append(mat)
+    report['bake_device'] = gpu_cycles(scene)
+    scene.cycles.samples = 4
+    select_only([high, low], low)
+    bpy.ops.object.bake(
+        type='DIFFUSE',
+        pass_filter={'COLOR'},
+        use_selected_to_active=True,
+        cage_extrusion=extent * 0.01,
+        max_ray_distance=extent * 0.05,
+        margin=max(4, size // 128),
+    )
+    bsdf = mat.node_tree.nodes['Principled BSDF']
+    mat.node_tree.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+    bpy.data.objects.remove(high)
+    report['baked'] = [size, size]
+    return low
+
+
 def main():
     original, new, out, opts = parse_args()
     report = {'original': os.path.basename(original), 'new': os.path.basename(new), 'options': opts}
@@ -170,12 +261,12 @@ def main():
     obj.data.transform(Matrix.Translation(centre) @ Matrix.Scale(k, 4) @ Matrix.Translation(-ncentre))
     obj.data.update()
     report['scale'] = k
-    # Fewer triangles.
+    # Fewer triangles: a reduced copy with new UVs, its base colour baked
+    # from the full model (reducing an image-to-3D model's own UV atlas
+    # tears it: thousands of islands, split at every seam).
     have = triangles([obj])
-    if have > opts['triangles']:
-        mod = obj.modifiers.new('fit', 'DECIMATE')
-        mod.ratio = opts['triangles'] / have
-        bpy.ops.object.modifier_apply(modifier=mod.name)
+    if have > opts['triangles'] or opts['bake'] == 'on':
+        obj = baked_copy(obj, opts, report)
     report['triangles'] = triangles([obj])
     flo, fhi = bounds([obj])
     report['bounds'] = [list(flo), list(fhi)]

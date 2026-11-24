@@ -87,5 +87,29 @@ it is hit.
   read back in the original's space with GS alpha, a JPEG refused; the
   overlay row; the baseline); clippy shows only the older warnings
   (audio.rs, wgpu-hal).
-- **Not yet.** The owner's real barrel (ChatGPT, then Meshy or Tripo) and
-  the owner's playtest.
+- **Not yet.** The owner's playtest.
+
+## The owner's barrel (2026-11-23)
+
+- **Getting a textured model.** Tripo made a good one from the owner's
+  ChatGPT picture but asks for payment to export ("tripo wants money to
+  export"); Meshy's own pages say its free tier downloads untextured
+  models; Tencent's Hunyuan3D-2 demo on Hugging Face showed "Texture
+  Generation (Unavailable)". The owner then used a free Hugging Face demo
+  (setting out to use TRELLIS) and downloaded a zip of three files:
+  base.glb (shape only), base_basic_shaded.glb (light painted into an
+  emissive texture: not used, the game lights the barrel itself) and
+  base_basic_pbr.glb (base colour, normal and metallic-roughness PNGs;
+  1,000,000 triangles, 618,438 vertices; written by Blender's glTF
+  exporter 4.3.47).
+- **The first fit tore it.** Reducing the model itself (its UV atlas has
+  thousands of islands, split at every seam) stopped at 13,009 triangles
+  with holes, splinters and white atlas gaps. fit_model.py now makes a
+  copy welded at its seams, reduces that to the triangle budget, gives it
+  smart-projected UVs and bakes the full model's base colour onto it
+  (Cycles DIFFUSE colour, 4 samples, the GPU through OptiX): 4,000
+  triangles and a 1024² texture, clean, in 38 s on the owner's RTX 3060.
+- **In G1** (the frame above): both start barrels are the new model, at
+  the original's places and tilt. It is warmer and brighter than the
+  original: the model's own reddish-orange wood (as in the owner's Tripo
+  version).
