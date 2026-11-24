@@ -471,7 +471,7 @@ fn file_stem(label: &str) -> String {
 }
 
 /// The package's folder: each '/' part of its name as a file stem.
-fn package_dir(name: &str) -> PathBuf {
+pub(crate) fn package_dir(name: &str) -> PathBuf {
     name.split('/').map(file_stem).collect()
 }
 
@@ -517,14 +517,32 @@ fn write(path: &Path, bytes: &[u8]) -> R<()> {
     Ok(())
 }
 
+/// Each object's file stem in a package folder (the export's and the
+/// model pack's), its display label and all its labels, in object order:
+/// the first label's file stem, "#<index>" without a label, "~<index>"
+/// added when the stem clashes ignoring case with an earlier object's.
+pub(crate) fn object_files(objects: &Objects) -> Vec<(u32, String, String, Vec<String>)> {
+    let labels = object_labels(objects);
+    let mut used = HashSet::new();
+    let mut out = Vec::new();
+    for object in &objects.objects {
+        let names = labels.get(&object.index).cloned().unwrap_or_default();
+        let label = names.first().cloned().unwrap_or_else(|| format!("#{}", object.index));
+        let mut stem = file_stem(&label);
+        if !used.insert(stem.to_ascii_lowercase()) {
+            stem = format!("{stem}~{}", object.index);
+            used.insert(stem.to_ascii_lowercase());
+        }
+        out.push((object.index, stem, label, names));
+    }
+    out
+}
+
 /// Every object of a package, one file each, in OUT/objects/<package>/.
 fn export_objects(out: &Path, name: &str, p: &Loaded, manifest: &mut Vec<Value>, unsupported: &mut Vec<String>) -> R<()> {
     let dir = out.join("objects").join(package_dir(name));
-    let labels = object_labels(&p.objects);
-    let mut used = HashSet::new();
-    for object in &p.objects.objects {
-        let names = labels.get(&object.index).cloned().unwrap_or_default();
-        let label = names.first().cloned().unwrap_or_else(|| format!("#{}", object.index));
+    for (index, stem, label, names) in object_files(&p.objects) {
+        let Some(object) = p.objects.objects.iter().find(|o| o.index == index) else { continue };
         let mut w = Writer::new(&p.images);
         let found = w.object_mesh(&p.objects, object.index, &label);
         unsupported.append(&mut w.unsupported);
@@ -535,11 +553,6 @@ fn export_objects(out: &Path, name: &str, p: &Loaded, manifest: &mut Vec<Value>,
             "extras": {"gdl": {"package": name, "object": object.index, "labels": names, "radius": object.radius, "flags": object.flags}},
         }));
         w.glb.roots.push(node);
-        let mut stem = file_stem(&label);
-        if !used.insert(stem.to_ascii_lowercase()) {
-            stem = format!("{stem}~{}", object.index);
-            used.insert(stem.to_ascii_lowercase());
-        }
         let path = dir.join(format!("{stem}.glb"));
         let bytes = w.glb.bytes(json!({"gdl": {"package": name, "object": object.index, "space": SPACE}}))?;
         write(&path, &bytes)?;

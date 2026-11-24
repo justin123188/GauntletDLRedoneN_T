@@ -24,6 +24,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | fullscreen | false | (kept) | borderless fullscreen |
 | reduce_flashes | false | false | brightening ambient specials at 30 % |
 | texture_pack | none | none | replacement PNG directory (read at startup) |
+| model_pack_folder | true | false | NATIVE (this fork): .glb files in model_pack beside the game replace objects by package and label (read at startup; decisions/0022) |
 | show_fps | false | (kept) | frame-rate counter |
 | button_prompts | "auto" | "playstation" (GDL_BASELINE; the overlay's "Original presentation" keeps it) | the face-button prompts' style: "auto", "playstation", "xbox" (Button prompts, below) |
 | keys | {} | (kept) | player 1's key bindings (action → key names) |

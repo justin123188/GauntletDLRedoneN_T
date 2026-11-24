@@ -13,6 +13,7 @@ pub mod hud_layout;
 pub mod material_maps;
 pub mod menu;
 pub mod model_export;
+pub mod model_pack;
 pub mod movie;
 pub mod net;
 pub mod settings;

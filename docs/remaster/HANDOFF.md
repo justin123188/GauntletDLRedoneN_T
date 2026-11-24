@@ -198,6 +198,13 @@ Commands (no window):
 - `blender --background --factory-startup --python
   tools/blender/check_glb.py -- REPORT.json [--render DIR] FILE.glb ...`:
   imports exports into empty scenes, reports counts and renders previews.
+- `blender --background --factory-startup --python
+  tools/blender/fit_model.py -- ORIGINAL.glb NEW.glb OUT.glb [--triangles
+  N] [--texture PX] [--yaw DEG] [--fit height|box] [--report F.json]
+  [--preview DIR]`: fits a new model to an exported original for the
+  model pack (decisions/0022).
+- Blender 5.3.0 (portable) is unpacked beside the repository in
+  `E:\Emulation\PORTS\GDL PS2 part\tools\blender-5.3.0-windows-x64\`.
 
 The Python tools under `tools/python/` (`frozen_frames.py`, `perf_bench.py`,
 `menu_flows.py` …) assume Linux and Xvfb. Treat them as references, not as
@@ -320,8 +327,14 @@ later. And effects look better mostly through their textures.
      level's scene with its COLLISION and WATER layers. The owner's
      Blender experience is basic, so the owner chooses and our scripts do
      the work (models-plan.md "Tools for the owner").
-   - Next: a test prop through image-to-3D and our fitting script, and a
-     first model loader (M5). G1's barrel is a flip-book of 26 objects
+   - M5, first step: the model pack and the fitting script, built
+     2026-11-23 (decisions/0022). `model_pack\<package>\<LABEL>.glb`
+     beside the game replaces that object; tools/blender/fit_model.py
+     fits any model to the original. Tested with a Blender-made stand-in
+     barrel in G1.
+   - Next: the owner's barrel (ChatGPT picture, then Meshy or Tripo,
+     the owner's choice), fitted and playtested. G1's barrel is a
+     flip-book of 26 objects; only the standing one is replaced at first
      (models-plan.md M4).
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
@@ -400,5 +413,6 @@ memory. The port stays the base.
       the owner wants them replaced in the vegetation overhaul instead.
 - [ ] Camera follow-ups (§3) as the owner asks.
 - [x] Model exporter (decisions/0021): built and checked in Blender 5.3.0
-      2026-11-23. Next: a test prop (image-to-3D, our fitting script) and
-      the first model loader (M5).
+      2026-11-23.
+- [ ] Model pack (decisions/0022): built and tested with a stand-in
+      barrel 2026-11-23; the owner's barrel and playtest next.

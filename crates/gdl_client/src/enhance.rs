@@ -101,11 +101,12 @@ enum GRow {
     GemGlow,
     HdTextures,
     TexturePack,
+    ModelPack,
     SaveTextures,
     Back,
 }
 
-const GRAPHICS: [GRow; 18] = [
+const GRAPHICS: [GRow; 19] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -122,6 +123,7 @@ const GRAPHICS: [GRow; 18] = [
     GRow::GemGlow,
     GRow::HdTextures,
     GRow::TexturePack,
+    GRow::ModelPack,
     GRow::SaveTextures,
     GRow::Back,
 ];
@@ -342,6 +344,11 @@ impl Overlay {
                         let later = if want != self.textures.pack.is_some() { " (next start)" } else { "" };
                         format!("Texture pack folder  {state}{later}")
                     }
+                    // NATIVE (this fork, decisions/0022): read at startup.
+                    GRow::ModelPack => {
+                        let later = if s.model_pack_folder != crate::model_pack::active() { " (next start)" } else { "" };
+                        format!("Model pack folder    {}{later}", on(s.model_pack_folder))
+                    }
                     GRow::SaveTextures => {
                         format!("Save textures        {}", if self.textures.dump.is_some() { format!("On ({} saved)", self.textures.saved) } else { "Off".to_string() })
                     }
@@ -353,6 +360,10 @@ impl Overlay {
             if GRAPHICS.get(self.cursor) == Some(&GRow::TexturePack) {
                 out.push("Texture pack: PNG files in texture_pack beside the game replace".to_string());
                 out.push("its textures (names as in texture_dump). F5 in play reloads them.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::ModelPack) {
+                out.push("Model pack: .glb files in model_pack beside the game replace its".to_string());
+                out.push("objects (names as in the model export). Read at startup.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::SaveTextures) {
                 out.push("Save textures: textures loaded from now on go to texture_dump".to_string());
@@ -596,6 +607,7 @@ impl Overlay {
                     GRow::GemGlow => s.gem_glow = !s.gem_glow,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
                     GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
+                    GRow::ModelPack => s.model_pack_folder = !s.model_pack_folder,
                     GRow::SaveTextures => return Effect::SaveTextures,
                     GRow::Back => {
                         if i != Input::Accept {
@@ -906,6 +918,16 @@ mod tests {
         assert_eq!(o.textures.saved, 12);
         // The main page's Original presentation turns the folder off too.
         assert!(!Settings::default().with_baseline_presentation().texture_pack_folder);
+        // NATIVE (this fork, decisions/0022): the model pack row.
+        o.cursor = MAIN.iter().position(|r| *r == Row::Graphics).unwrap();
+        o.input(Input::Accept, &mut s, &mut b);
+        o.cursor = GRAPHICS.iter().position(|r| *r == GRow::ModelPack).unwrap();
+        assert!(row(&o, &s, "Model pack folder").ends_with("folder    On (next start)"));
+        assert_eq!(o.input(Input::Accept, &mut s, &mut b), Effect::Changed);
+        assert!(!s.model_pack_folder);
+        assert!(row(&o, &s, "Model pack folder").ends_with("folder    Off"));
+        assert!(o.lines(&s, &b).iter().any(|l| l.starts_with("Model pack: .glb files")));
+        assert!(!Settings::default().with_baseline_presentation().model_pack_folder);
     }
 
     #[test]

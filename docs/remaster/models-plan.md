@@ -195,7 +195,11 @@ that one job.
    BAROBJDONE17F24 broken), so a replacement of the standing frame alone
    shows until the barrel is hit.
 5. **M5** Model pack loader for props, with light transfer, F5 and the
-   fallback. A handful of props on the first test level.
+   fallback. A handful of props on the first test level. First step
+   built 2026-11-23 (decisions/0022): the model pack (by package and
+   label, the fallback, live light) and tools/blender/fit_model.py,
+   tested with a stand-in barrel in G1. Still to do: light taken over
+   from the baked scenery (option A), F5 and the owner's props.
 6. **M6** Replacement ground for one level, with the collision checker.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.

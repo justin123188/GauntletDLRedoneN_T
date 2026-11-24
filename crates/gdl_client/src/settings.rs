@@ -40,6 +40,10 @@ pub struct Settings {
     /// the texture_pack folder beside the game is the pack (made at
     /// startup with a README). Off in the baseline. Read at startup.
     pub texture_pack_folder: bool,
+    /// NATIVE (this fork, decisions/0022): the model_pack folder beside the
+    /// game replaces objects with .glb files (gdl_client::model_pack). Off
+    /// in the baseline. Read at startup.
+    pub model_pack_folder: bool,
     /// Frame-time overlay (diagnostics).
     pub show_fps: bool,
     /// The button prompts' style (gdl_client::glyphs): "auto" follows the
@@ -147,6 +151,7 @@ impl Default for Settings {
             reduce_flashes: false,
             texture_pack: None,
             texture_pack_folder: true,
+            model_pack_folder: true,
             show_fps: false,
             button_prompts: Prompts::Auto,
             keys: Default::default(),
@@ -233,6 +238,7 @@ impl Settings {
             reduce_flashes: false,
             texture_pack: None,
             texture_pack_folder: false,
+            model_pack_folder: false,
             hud_size: 100,
             hud_edges: false,
             hud_hide_empty: false,
@@ -362,6 +368,7 @@ mod tests {
         assert!(!b.interpolate && !b.widescreen && b.msaa == 1 && b.texture_pack.is_none() && b.button_prompts == Prompts::PlayStation);
         // NATIVE (this fork): the texture_pack folder is a remaster default only.
         assert!(!b.texture_pack_folder && Settings::default().texture_pack_folder);
+        assert!(!b.model_pack_folder && Settings::default().model_pack_folder);
         // NATIVE (this fork): the HUD layout options.
         assert!(b.hud_size == 100 && !b.hud_edges && !b.hud_hide_empty);
         let d = Settings::default();

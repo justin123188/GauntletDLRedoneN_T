@@ -4760,7 +4760,10 @@ fn load_package(p: &Value) -> Result<Package, Box<dyn Error>> {
     })
 }
 
+/// A package's library; `name` is the package's name (the model pack's
+/// folder, NATIVE: decisions/0022).
 fn build_library(
+    name: &str,
     pkg: &Package,
     meshes: &mut Assets<Mesh>,
     images: &mut Assets<Image>,
@@ -4768,7 +4771,8 @@ fn build_library(
 ) -> Library {
     let texmods = gdl_formats::animation::texmods(&pkg.anim_bytes).unwrap_or_default();
     let set = gdl_client::materials_for(&pkg.objects, &pkg.table, &pkg.textures, &texmods, images, materials);
-    let (parts, _) = gdl_client::object_meshes(&pkg.objects, &set, materials, meshes);
+    let (mut parts, _) = gdl_client::object_meshes(&pkg.objects, &set, materials, meshes);
+    gdl_client::model_pack::apply(name, &pkg.objects, &mut parts, meshes, images, materials);
     assemble_library(pkg, set, parts)
 }
 
@@ -5648,7 +5652,7 @@ fn setup(
     for (name, pkg) in &sources.packages {
         if !libraries.0.contains_key(name) {
             gdl_client::texture_pack::set_source(dump_kind(name), name);
-            libraries.0.insert(name.clone(), build_library(pkg, &mut meshes, &mut images, &mut materials));
+            libraries.0.insert(name.clone(), build_library(name, pkg, &mut meshes, &mut images, &mut materials));
         }
         if sources.monster_packages.contains(name) && !frames.0.contains_key(name) {
             frames.0.insert(name.clone(), enemy_frames(pkg));
@@ -5678,7 +5682,12 @@ fn spawn_level(
         gdl_client::texture_pack::set_source("level", &format!("{} {}", l.name, l.title));
     }
     let set = gdl_client::materials_for(&level.objects, &level.table, &level.textures, &texmods, images, materials);
-    let (parts, _) = gdl_client::object_meshes(&level.objects, &set, materials, meshes);
+    let (mut parts, _) = gdl_client::object_meshes(&level.objects, &set, materials, meshes);
+    // NATIVE (this fork, decisions/0022): the level's objects in the model
+    // pack (its folder: the level's name).
+    if let Some(l) = session.levels.get(session.current) {
+        gdl_client::model_pack::apply(&l.name, &level.objects, &mut parts, meshes, images, materials);
+    }
     let names: HashMap<_, _> = level.objects.definitions.iter().map(|d| (d.label.as_str(), d.object_index as u32)).collect();
     let nodes = &session.world.nodes;
     // CreateWorldNode: MB flags = record +0x18, | 4 for file flags & 0x1001
@@ -9630,7 +9639,7 @@ fn setup_menu_icon(
     let pkg = &front.powerups_pkg;
     let Some((tree_index, tree)) = pkg.anim.as_ref().and_then(|a| a.trees.iter().enumerate().find(|(_, t)| t.label == "ICON_ARROW")) else { return };
     gdl_client::texture_pack::set_source("package", "POWERUPS");
-    let lib = build_library(pkg, &mut meshes, &mut images, &mut materials);
+    let lib = build_library("POWERUPS", pkg, &mut meshes, &mut images, &mut materials);
     // ScreenSaverCreateWeap's trees (AtreeMatch(powerup_anim, ssave_desc[k])).
     let mut saver = SaverTrees::default();
     let saver_layer = bevy::camera::visibility::RenderLayers::layer(SAVER_LAYER);
@@ -10238,7 +10247,7 @@ fn install_char(front: &Front, sources: &mut Sources, libraries: &mut Libraries,
     for (name, pkg) in [(pc.model_name.clone(), model), (pc.sfx_name.clone(), sfx)] {
         if !libraries.0.contains_key(&name) {
             gdl_client::texture_pack::set_source("character", &name);
-            libraries.0.insert(name.clone(), build_library(&pkg, meshes, images, materials));
+            libraries.0.insert(name.clone(), build_library(&name, &pkg, meshes, images, materials));
         }
         sources.packages.entry(name).or_insert(pkg);
     }
@@ -12263,6 +12272,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     gdl_client::texture_pack::configure(pack);
+    // NATIVE (this fork, decisions/0022): the model_pack folder beside the
+    // game replaces objects (made here; off in the baseline).
+    let model_pack = gdl_client::model_pack::default_dir().filter(|_| settings.model_pack_folder);
+    if let Some(dir) = model_pack.as_deref() {
+        gdl_client::model_pack::ensure_dir(dir);
+    }
+    gdl_client::model_pack::configure(model_pack);
     // NATIVE (this fork, decisions/0015): material detail from the first
     // textures loaded, with the pack's materials.tsv.
     gdl_client::material_maps::set_enabled(settings.material_detail);
@@ -12824,7 +12840,7 @@ fn advance_level(
             let pkg = &sources.packages[&name];
             if !libraries.0.contains_key(&name) {
                 gdl_client::texture_pack::set_source(dump_kind(&name), &name);
-                libraries.0.insert(name.clone(), build_library(pkg, &mut meshes, &mut images, &mut materials));
+                libraries.0.insert(name.clone(), build_library(&name, pkg, &mut meshes, &mut images, &mut materials));
             }
             if sources.monster_packages.contains(&name) && !frames.0.contains_key(&name) {
                 frames.0.insert(name.clone(), enemy_frames(pkg));
