@@ -113,6 +113,8 @@ it is hit.
   the original's places and tilt. It is warmer and brighter than the
   original: the model's own reddish-orange wood (as in the owner's Tripo
   version).
+- **Its breaking frames** followed (decisions/0023), with textures shared
+  across a package's files.
 - **Installed and playtested (2026-11-24).** The build of this change
   and the fitted barrel (model_pack\ITEMS_G\BAROBJIDLE15F01.glb) in the
   owner's game, the previous exe kept as a backup. The owner kept the

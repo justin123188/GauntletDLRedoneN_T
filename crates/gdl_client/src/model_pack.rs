@@ -29,9 +29,11 @@ use bevy::{
 use gdl_formats::objects::Objects;
 use serde_json::Value;
 use std::{
+    cell::RefCell,
     collections::HashMap,
+    hash::{DefaultHasher, Hasher},
     path::{Path, PathBuf},
-    sync::{Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 static DIR: RwLock<Option<PathBuf>> = RwLock::new(None);
@@ -101,7 +103,10 @@ pub struct NewPart {
     pub indices: Vec<u32>,
     /// Width, height and RGBA with GS alpha (0x80 opaque), the base colour
     /// factor applied; a 1×1 texel of the factor without a texture.
-    pub texture: (u32, u32, Vec<u8>),
+    pub texture: Texture,
+    /// The same for parts whose texture is the same: a hash of the image
+    /// file's bytes, the colour factor and the alpha class.
+    pub texture_key: u64,
     /// 0 opaque, 1 cut-out, 2 blended (the file's alphaMode).
     pub class: u8,
     pub double_sided: bool,
@@ -111,8 +116,22 @@ pub struct NewPart {
 
 type R<T> = Result<T, String>;
 
+/// A decoded texture: width, height and RGBA with GS alpha.
+pub type Texture = Arc<(u32, u32, Vec<u8>)>;
+
+/// Decoded textures by their key ([`NewPart::texture_key`]): the files of a
+/// package that embed one image (a flip-book's frames from
+/// tools/blender/break_frames.py) decode it once.
+#[derive(Default)]
+pub struct Textures(HashMap<u64, Texture>);
+
 /// A file's parts.
 pub fn read_glb(bytes: &[u8]) -> R<Vec<NewPart>> {
+    read_glb_with(bytes, &mut Textures::default())
+}
+
+/// A file's parts, with textures shared through `textures`.
+pub fn read_glb_with(bytes: &[u8], textures: &mut Textures) -> R<Vec<NewPart>> {
     let word = |o: usize| -> R<u32> { Ok(u32::from_le_bytes(bytes.get(o..o + 4).ok_or("truncated file")?.try_into().unwrap())) };
     if bytes.get(0..4) != Some(b"glTF") || word(4)? != 2 {
         return Err("not a glTF 2.0 binary (.glb)".into());
@@ -136,7 +155,7 @@ pub fn read_glb(bytes: &[u8]) -> R<Vec<NewPart>> {
     {
         return Err("a buffer outside the file (only .glb with its data inside)".into());
     }
-    let g = Gltf { doc: &doc, bin };
+    let g = Gltf { doc: &doc, bin, textures: RefCell::new(std::mem::take(&mut textures.0)) };
     let scene = doc["scene"].as_u64().unwrap_or(0) as usize;
     let roots: Vec<usize> = match doc["scenes"].get(scene) {
         Some(s) => s["nodes"].as_array().map(|n| n.iter().filter_map(|v| v.as_u64().map(|v| v as usize)).collect()).unwrap_or_default(),
@@ -144,9 +163,9 @@ pub fn read_glb(bytes: &[u8]) -> R<Vec<NewPart>> {
     };
     let mut out = Vec::new();
     let mut vertices = 0;
-    for root in roots {
-        g.node(root, Mat4::IDENTITY, 0, &mut out, &mut vertices)?;
-    }
+    let walked = roots.into_iter().try_for_each(|root| g.node(root, Mat4::IDENTITY, 0, &mut out, &mut vertices));
+    textures.0 = g.textures.into_inner();
+    walked?;
     if out.is_empty() {
         return Err("no triangles".into());
     }
@@ -160,6 +179,7 @@ type Access<'a> = (&'a [u8], usize, usize, u64, usize, bool);
 struct Gltf<'a> {
     doc: &'a Value,
     bin: &'a [u8],
+    textures: RefCell<HashMap<u64, Texture>>,
 }
 
 impl Gltf<'_> {
@@ -227,14 +247,14 @@ impl Gltf<'_> {
             let back = |v: Vec3| [-v.x, v.y, v.z];
             let positions = positions.iter().map(|&v| back(world.transform_point3(Vec3::from_array(v)))).collect();
             let normals = normals.iter().map(|&v| back((normal_matrix * Vec3::from_array(v)).normalize_or(Vec3::Y))).collect();
-            let (texture, class, double_sided, clamp) = self.material(p["material"].as_u64().map(|m| m as usize))?;
-            out.push(NewPart { positions, normals, uvs, indices, texture, class, double_sided, clamp });
+            let (texture, texture_key, class, double_sided, clamp) = self.material(p["material"].as_u64().map(|m| m as usize))?;
+            out.push(NewPart { positions, normals, uvs, indices, texture, texture_key, class, double_sided, clamp });
         }
         Ok(())
     }
 
     #[allow(clippy::type_complexity)]
-    fn material(&self, index: Option<usize>) -> R<((u32, u32, Vec<u8>), u8, bool, (bool, bool))> {
+    fn material(&self, index: Option<usize>) -> R<(Texture, u64, u8, bool, (bool, bool))> {
         let none = Value::Null;
         let m = match index {
             Some(i) => self.doc["materials"].get(i).ok_or("material index")?,
@@ -249,7 +269,7 @@ impl Gltf<'_> {
             _ => 0,
         };
         let mut clamp = (false, false);
-        let (w, h, mut rgba) = match pbr["baseColorTexture"]["index"].as_u64() {
+        let png = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => {
                 let tex = self.doc["textures"].get(t as usize).ok_or("texture index")?;
                 if let Some(s) = tex["sampler"].as_u64().and_then(|s| self.doc["samplers"].get(s as usize)) {
@@ -259,9 +279,26 @@ impl Gltf<'_> {
                 if img["mimeType"].as_str() != Some("image/png") {
                     return Err(format!("a {} texture: only PNG is read (fit_model.py writes PNG)", img["mimeType"].as_str().unwrap_or("non-embedded")));
                 }
-                let view = self.view(img["bufferView"].as_u64().ok_or("an image outside the file")? as usize)?;
-                decode_png(view)?
+                Some(self.view(img["bufferView"].as_u64().ok_or("an image outside the file")? as usize)?)
             }
+            None => None,
+        };
+        let mut hash = DefaultHasher::new();
+        hash.write_u8(class);
+        for f in factor {
+            hash.write_u32(f.to_bits());
+        }
+        if let Some(bytes) = png {
+            hash.write_usize(bytes.len());
+            hash.write(bytes);
+        }
+        let key = hash.finish();
+        let double_sided = m["doubleSided"].as_bool().unwrap_or(false);
+        if let Some(t) = self.textures.borrow().get(&key) {
+            return Ok((t.clone(), key, class, double_sided, clamp));
+        }
+        let (w, h, mut rgba) = match png {
+            Some(bytes) => decode_png(bytes)?,
             None => (1, 1, vec![255; 4]),
         };
         for p in rgba.chunks_exact_mut(4) {
@@ -271,7 +308,9 @@ impl Gltf<'_> {
             // GS alpha (0x80 opaque); an opaque material has no alpha.
             p[3] = if class == 0 { 0x80 } else { ((u16::from(p[3]) * 128 + 127) / 255) as u8 };
         }
-        Ok(((w, h, rgba), class, m["doubleSided"].as_bool().unwrap_or(false), clamp))
+        let t = Arc::new((w, h, rgba));
+        self.textures.borrow_mut().insert(key, t.clone());
+        Ok((t, key, class, double_sided, clamp))
     }
 
     fn view(&self, index: usize) -> R<&[u8]> {
@@ -402,6 +441,10 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
         return;
     }
     let sharp = texfilter::sharp();
+    // A package's files that share a texture (a flip-book's frames) share
+    // its decoding, its image and, per object, its material.
+    let mut textures = Textures::default();
+    let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
     for (index, stem, label, _) in model_export::object_files(objects) {
         let path = folder.join(format!("{stem}.glb"));
         if !path.is_file() {
@@ -411,7 +454,8 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             report(format!("{package}/{label}: the original has no drawn part; not replaced"));
             continue;
         };
-        let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb(&b)) {
+        let mut made: HashMap<(u64, u16, u8, bool), Handle<GsMaterial>> = HashMap::new();
+        let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb_with(&b, &mut textures)) {
             Ok(n) => n,
             Err(e) => {
                 report(format!("{package}/{label}: {e}; the original stays"));
@@ -429,12 +473,23 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; n])
                 .with_inserted_indices(Indices::U32(p.indices));
-            let (w, h, rgba) = p.texture;
-            let flags = if p.clamp.0 { 4 } else { 0 } | if p.clamp.1 { 8 } else { 0 };
-            let key = texfilter::TexKey { flags, levels: 1, animated: false, borrowed: false };
-            let levels = texfilter::with_chain(w, h, vec![rgba], sharp);
-            let image = images.add(mip_image(w as u16, h as u16, levels, texfilter::sampler(key, sharp)));
-            texfilter::register(image.id(), key);
+            let flags: u16 = if p.clamp.0 { 4 } else { 0 } | if p.clamp.1 { 8 } else { 0 };
+            let shared = (p.texture_key, flags, p.class, p.double_sided);
+            if let Some(m) = made.get(&shared) {
+                list.push((meshes.add(mesh), m.clone()));
+                continue;
+            }
+            let image = uploaded
+                .entry((p.texture_key, flags))
+                .or_insert_with(|| {
+                    let (w, h, rgba) = &*p.texture;
+                    let key = texfilter::TexKey { flags, levels: 1, animated: false, borrowed: false };
+                    let levels = texfilter::with_chain(*w, *h, vec![rgba.clone()], sharp);
+                    let image = images.add(mip_image(*w as u16, *h as u16, levels, texfilter::sampler(key, sharp)));
+                    texfilter::register(image.id(), key);
+                    image
+                })
+                .clone();
             let mut m = original.clone();
             m.base = Some(image);
             m.lightmap = None;
@@ -453,7 +508,9 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 _ => AlphaMode::Blend,
             };
             m.draw.cull = !p.double_sided;
-            list.push((meshes.add(mesh), materials.add(m)));
+            let m = materials.add(m);
+            made.insert(shared, m.clone());
+            list.push((meshes.add(mesh), m));
         }
         report(format!("{package}/{label}: {triangles} triangles in {} parts from {}", list.len(), path.display()));
         parts.insert(index, list);
@@ -536,7 +593,12 @@ mod tests {
         assert_eq!(p.indices, vec![0, 1, 2]);
         assert_eq!(p.uvs, vec![[0.0, 0.0]; 3]);
         assert_eq!((p.class, p.double_sided), (2, true));
-        assert_eq!(p.texture, (2, 1, vec![255, 0, 0, 128, 0, 255, 0, 0]));
+        assert_eq!(*p.texture, (2, 1, vec![255, 0, 0, 128, 0, 255, 0, 0]));
+        // Files embedding one image share its decoding.
+        let mut textures = Textures::default();
+        let a = read_glb_with(&glb, &mut textures).unwrap();
+        let b = read_glb_with(&glb, &mut textures).unwrap();
+        assert!(Arc::ptr_eq(&a[0].texture, &b[0].texture) && a[0].texture_key == p.texture_key);
         // A JPEG image is refused with a message.
         let at = glb.windows(9).position(|w| w == b"image/png").unwrap();
         glb[at..at + 9].copy_from_slice(b"image/jpg");

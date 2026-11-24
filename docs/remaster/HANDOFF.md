@@ -203,6 +203,14 @@ Commands (no window):
   N] [--texture PX] [--yaw DEG] [--fit height|box] [--report F.json]
   [--preview DIR]`: fits a new model to an exported original for the
   model pack (decisions/0022).
+- `blender --background --factory-startup --python
+  tools/blender/break_frames.py -- ORIGINAL_DIR NEW.glb OUT_DIR FRAME...
+  [--thickness T] [--keep-base 0|1] [--report F.json] [--preview DIR]`:
+  cuts a fitted model into the original's breaking pieces and writes a
+  model pack file per flip-book frame (decisions/0023).
+- `tools/windows/g1-smash-barrel.json` (GDL_INPUT_SCRIPT): the Sorceress
+  breaks the barrel above G1's start at about update 111; freeze at
+  updates 113 to 150 to see the break.
 - Blender 5.3.0 (portable) is unpacked beside the repository in
   `E:\Emulation\PORTS\GDL PS2 part\tools\blender-5.3.0-windows-x64\`.
 
@@ -335,10 +343,13 @@ later. And effects look better mostly through their textures.
    - The owner's barrel (a ChatGPT picture, a free TRELLIS demo on
      Hugging Face, fit_model.py's bake): in the owner's game 2026-11-24,
      the owner's playtest "Looks good". G1's barrel is a flip-book of 26
-     objects; only the standing one is replaced so far (models-plan.md
-     M4).
-   - Next (models-plan.md M5): the barrel's breaking frames, more props,
-     F5 reload, and light carried over from the baked scenery (option A).
+     objects (models-plan.md M4).
+   - Its breaking frames (decisions/0023, 2026-11-24):
+     tools/blender/break_frames.py cuts the fitted barrel into the
+     original's ten pieces and moves each as the original's piece moves;
+     the model pack shares one texture across the 26 files.
+   - Next (models-plan.md M5): more props, F5 reload, and light carried
+     over from the baked scenery (option A).
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
@@ -419,3 +430,5 @@ memory. The port stays the base.
       2026-11-23.
 - [x] Model pack (decisions/0022): the owner's barrel installed
       2026-11-24; the owner's playtest in G1, "Looks good".
+- [ ] Breaking frames (decisions/0023): built and checked in G1
+      2026-11-24; the owner's playtest next.
