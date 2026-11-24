@@ -359,6 +359,11 @@ later. And effects look better mostly through their textures.
      automate much of it.
 3. **Effects and particles:** mostly through textures first, then more or
    softer particles.
+   - The owner's wish (2026-11-24, "we don't have to do that now"): the
+     poison and red barrels' effects upgraded, now "kinda a flat mist",
+     to something more volumetric. Not started; the effects are the
+     game's particle systems (gdl_core psys), so a NATIVE presentation
+     upgrade of how they draw, the original kept in the baseline.
    - Later, the owner's wishes (2026-11-24, "we can add physics later down
      the road"): debris that answers the hit (the pieces of a replaced
      breakable pushed away from the spell or blow that broke it, falling
