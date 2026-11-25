@@ -9047,6 +9047,14 @@ fn chest_content_scale(g: &Game, c: usize) -> f32 {
 #[derive(Resource, Default)]
 struct ChestNodes(HashMap<usize, Mat4>);
 
+/// GDL_DEBUG_ITEM_TREES (DEBUG): each item name's tree package, the first
+/// time the name is posed in a level (research/unknowns.md "Item trees
+/// after another level").
+fn item_tree_debug() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("GDL_DEBUG_ITEM_TREES").is_some())
+}
+
 /// Item trees posed by the simulation's item animation clocks
 /// (ProcessItems' AnimateATree: the current sequence and frame).
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
@@ -9059,9 +9067,18 @@ fn present_item_trees(
     mut trees: Local<HashMap<String, Option<(String, usize)>>>,
     (libs, mut req, mut texmods): (Res<Libraries>, ResMut<MatRequests>, Local<HashMap<(String, usize), Vec<NodeTexMod>>>),
     mut chest_nodes: ResMut<ChestNodes>,
+    mut logged: Local<(Option<usize>, std::collections::HashSet<String>)>,
 ) {
     let items = &session.levels[session.current].items;
     chest_nodes.0.clear();
+    // Names resolve against the level's own item packages, as the
+    // original's per-level packages do: a name met in another level (the
+    // Tower's EXIT_PORTAL in ITEMS_L, G1's in ITEMS_G) is looked up again
+    // (research/unknowns.md "Item trees after another level").
+    if logged.0 != Some(session.current) {
+        *logged = (Some(session.current), Default::default());
+        trees.clear();
+    }
     for (slot, children, vis) in &slots {
         if slot.kind != SlotKind::Item || *vis == Visibility::Hidden {
             continue;
@@ -9077,6 +9094,9 @@ fn present_item_trees(
                 })
             })
             .clone();
+        if item_tree_debug() && logged.1.insert(name.to_string()) {
+            eprintln!("item tree {name}: {found:?} in {}", session.levels[session.current].name);
+        }
         let Some((pkg, tree)) = found else { continue };
         let Some(p) = sources.packages.get(&pkg) else { continue };
         let Some(a) = p.anim.as_ref() else { continue };

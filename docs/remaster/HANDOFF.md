@@ -213,6 +213,11 @@ Commands (no window):
   tools/blender/recolour.py -- NEW.glb FROM.glb TO.glb OUT.glb [--report
   F.json] [--preview DIR]`: paints a model pack file the way original TO
   differs from original FROM, textures only (decisions/0024).
+- `GDL_DEBUG_ITEM_TREES=1`: each item name's tree package, the first
+  time the name is posed in a level (stderr: `item tree BAROBJ:
+  Some(("ITEMS_G", 20)) in G1`). With `GDL_DEBUG_LEVEL=F2` and
+  GDL_TEST_ACTIONS `[{"at": 600, "exit_next": true}]` (each level ends at
+  its update 600) a run goes F2 → G1 → the Tower (L1).
 - G1's red barrel: GDL_TEST_ACTIONS `[{"at": 200, "teleport": [-2.8,
   25.45, -250.8]}, {"at": 260, "damage_item": [364, 1000]}]` stands the
   player beside two red barrels and breaks 364 (363 follows); freeze at
@@ -440,10 +445,12 @@ memory. The port stays the base.
       needs a look in play.
 - [x] Potion glow (decisions/0019): the owner's playtest 2026-11-23 of
       the 0.75 s flare, "yes .75 feels much better".
-- [ ] Barrels missing, chests and portal spirals still (the owner's
-      playtest 2026-11-23, G1, one session; maybe a one-off): not
-      reproduced yet. The owner saw them fine again later that day.
-      Suspect in research/unknowns.md "Item trees after another level".
+- [x] Barrels missing, chests and portal spirals still (the owner's
+      playtest 2026-11-23, G1, one session): fixed 2026-11-24
+      (decisions/0025). Item trees were looked up once per name for the
+      whole run, so a level could pose its items with the previous
+      world's trees; reproduced with G1 then the Tower. The owner's
+      playtest through the Tower next.
 - [x] Frames that varied from run to run (decisions/0020): fixed
       2026-11-23, SMAA before sharpening.
 - [ ] Interpolation while the simulation waits (research/unknowns.md):
