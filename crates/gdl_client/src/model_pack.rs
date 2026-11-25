@@ -9,13 +9,16 @@
 //! data. A file that does not load leaves the original, with a message.
 //!
 //! What a file may hold (fit_model.py writes exactly this): glTF 2.0
-//! binary with its buffer in the file; triangle primitives with POSITION
-//! and NORMAL (float), TEXCOORD_0 (float, or normalised unsigned byte or
-//! short), indices of any unsigned size; node translation, rotation, scale
-//! or matrix; a base colour texture as an embedded PNG and a base colour
-//! factor; alphaMode; doubleSided. Space: the model export's (x negated
-//! against the original, y up, one game unit per metre), so the triangle
-//! order is kept.
+//! binary with its buffer in the file or in one file beside it; triangle
+//! primitives with POSITION and NORMAL (float), TEXCOORD_0 (float, or
+//! normalised unsigned byte or short), indices of any unsigned size; node
+//! translation, rotation, scale or matrix; a base colour texture as a PNG
+//! (embedded, or a file beside it) and a base colour factor; alphaMode;
+//! doubleSided. Files beside a .glb are named by plain relative paths in
+//! its folder or below (tools/blender/share_data.py writes textures/ and
+//! data/), and files a package's .glb files share are read and decoded
+//! once (decisions/0026). Space: the model export's (x negated against the
+//! original, y up, one game unit per metre), so the triangle order is kept.
 //!
 //! Light: a replacement is lit live, as the game lights items (the
 //! level's sun and ambient, present_scene_light), wherever it stands. The
@@ -70,6 +73,8 @@ model_pack\\<package>\\<LABEL>.glb replaces object LABEL of that package, named\
 as gdl_play --export-models names it (objects\\<package>\\<LABEL>.glb). Fit a\r
 new model to the original with tools\\blender\\fit_model.py, which writes the\r
 file in the form the game reads (PNG textures, no compression).\r
+A package's textures and data folders hold what its .glb files share\r
+(tools\\blender\\share_data.py): keep them with the files.\r
 \r
 Read when the game starts. Collision and gameplay stay the original's. Delete\r
 a file to get the original back; F10 > Graphics > Model pack folder turns the\r
@@ -119,19 +124,57 @@ type R<T> = Result<T, String>;
 /// A decoded texture: width, height and RGBA with GS alpha.
 pub type Texture = Arc<(u32, u32, Vec<u8>)>;
 
-/// Decoded textures by their key ([`NewPart::texture_key`]): the files of a
-/// package that embed one image (a flip-book's frames from
-/// tools/blender/break_frames.py) decode it once.
-#[derive(Default)]
-pub struct Textures(HashMap<u64, Texture>);
+/// A file's bytes and their hash.
+type Shared = (u64, Arc<Vec<u8>>);
 
-/// A file's parts.
-pub fn read_glb(bytes: &[u8]) -> R<Vec<NewPart>> {
-    read_glb_with(bytes, &mut Textures::default())
+/// Decoded textures by their key ([`NewPart::texture_key`]), and the files
+/// read beside a package's .glb files by path: the files of a package that
+/// share one image (embedded in each, or one file beside them, as
+/// tools/blender/share_data.py writes) decode it once.
+#[derive(Default)]
+pub struct Textures {
+    decoded: HashMap<u64, Texture>,
+    files: HashMap<PathBuf, Shared>,
 }
 
-/// A file's parts, with textures shared through `textures`.
-pub fn read_glb_with(bytes: &[u8], textures: &mut Textures) -> R<Vec<NewPart>> {
+fn content_hash(bytes: &[u8]) -> u64 {
+    let mut h = DefaultHasher::new();
+    h.write_usize(bytes.len());
+    h.write(bytes);
+    h.finish()
+}
+
+/// A file named by a .glb's `uri`, beside it: a relative path of plain names
+/// (letters, digits, `_`, `-`, `.`) in its folder or below, never above it,
+/// never another drive, scheme or encoded name.
+fn beside_path(dir: Option<&Path>, uri: &str) -> R<PathBuf> {
+    let dir = dir.ok_or("data outside the file")?;
+    let plain = |c: &str| !c.is_empty() && c != "." && c != ".." && c.chars().all(|ch| ch.is_ascii_alphanumeric() || "_-.".contains(ch));
+    if !uri.split('/').all(plain) {
+        return Err(format!("{uri}: only a plain relative path beside the file is read"));
+    }
+    Ok(uri.split('/').fold(dir.to_path_buf(), |p, c| p.join(c)))
+}
+
+fn read_beside(files: &mut HashMap<PathBuf, Shared>, dir: Option<&Path>, uri: &str) -> R<Shared> {
+    let path = beside_path(dir, uri)?;
+    if let Some(hit) = files.get(&path) {
+        return Ok(hit.clone());
+    }
+    let bytes = crate::bounded_read(&path).map_err(|e| format!("{uri}: {e}"))?;
+    let got = (content_hash(&bytes), Arc::new(bytes));
+    files.insert(path, got.clone());
+    Ok(got)
+}
+
+/// A file's parts (data inside the file only).
+pub fn read_glb(bytes: &[u8]) -> R<Vec<NewPart>> {
+    read_glb_with(bytes, &mut Textures::default(), None)
+}
+
+/// A file's parts, with textures shared through `textures`; `beside` is the
+/// file's folder, for a buffer or images in files beside it.
+pub fn read_glb_with(bytes: &[u8], textures: &mut Textures, beside: Option<&Path>) -> R<Vec<NewPart>> {
     let word = |o: usize| -> R<u32> { Ok(u32::from_le_bytes(bytes.get(o..o + 4).ok_or("truncated file")?.try_into().unwrap())) };
     if bytes.get(0..4) != Some(b"glTF") || word(4)? != 2 {
         return Err("not a glTF 2.0 binary (.glb)".into());
@@ -150,12 +193,25 @@ pub fn read_glb_with(bytes: &[u8], textures: &mut Textures) -> R<Vec<NewPart>> {
         at += 8 + len;
     }
     let doc: Value = serde_json::from_slice(json.ok_or("no JSON chunk")?).map_err(|e| format!("JSON: {e}"))?;
-    if let Some(buffers) = doc["buffers"].as_array()
-        && buffers.iter().any(|b| b.get("uri").is_some())
-    {
-        return Err("a buffer outside the file (only .glb with its data inside)".into());
+    let buffers = doc["buffers"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    if 1 < buffers.len() {
+        return Err("more than one buffer".into());
     }
-    let g = Gltf { doc: &doc, bin, textures: RefCell::new(std::mem::take(&mut textures.0)) };
+    // The buffer in a file beside this one (share_data.py: one frame's
+    // geometry for every kind of a barrel).
+    let outside = match buffers.first().and_then(|b| b["uri"].as_str()) {
+        Some(uri) => Some(read_beside(&mut textures.files, beside, uri)?),
+        None => None,
+    };
+    let bin: &[u8] = outside.as_ref().map_or(bin, |(_, b)| b.as_slice());
+    let g = Gltf {
+        doc: &doc,
+        bin,
+        beside,
+        textures: RefCell::new(std::mem::take(&mut textures.decoded)),
+        files: RefCell::new(std::mem::take(&mut textures.files)),
+        images: RefCell::new(HashMap::new()),
+    };
     let scene = doc["scene"].as_u64().unwrap_or(0) as usize;
     let roots: Vec<usize> = match doc["scenes"].get(scene) {
         Some(s) => s["nodes"].as_array().map(|n| n.iter().filter_map(|v| v.as_u64().map(|v| v as usize)).collect()).unwrap_or_default(),
@@ -164,7 +220,8 @@ pub fn read_glb_with(bytes: &[u8], textures: &mut Textures) -> R<Vec<NewPart>> {
     let mut out = Vec::new();
     let mut vertices = 0;
     let walked = roots.into_iter().try_for_each(|root| g.node(root, Mat4::IDENTITY, 0, &mut out, &mut vertices));
-    textures.0 = g.textures.into_inner();
+    textures.decoded = g.textures.into_inner();
+    textures.files = g.files.into_inner();
     walked?;
     if out.is_empty() {
         return Err("no triangles".into());
@@ -179,7 +236,11 @@ type Access<'a> = (&'a [u8], usize, usize, u64, usize, bool);
 struct Gltf<'a> {
     doc: &'a Value,
     bin: &'a [u8],
+    beside: Option<&'a Path>,
     textures: RefCell<HashMap<u64, Texture>>,
+    files: RefCell<HashMap<PathBuf, Shared>>,
+    /// This file's images by index: their bytes and hash, found once.
+    images: RefCell<HashMap<usize, Shared>>,
 }
 
 impl Gltf<'_> {
@@ -275,11 +336,14 @@ impl Gltf<'_> {
                 if let Some(s) = tex["sampler"].as_u64().and_then(|s| self.doc["samplers"].get(s as usize)) {
                     clamp = (s["wrapS"].as_u64() == Some(33071), s["wrapT"].as_u64() == Some(33071));
                 }
-                let img = self.doc["images"].get(tex["source"].as_u64().ok_or("a texture without an image")? as usize).ok_or("image index")?;
-                if img["mimeType"].as_str() != Some("image/png") {
-                    return Err(format!("a {} texture: only PNG is read (fit_model.py writes PNG)", img["mimeType"].as_str().unwrap_or("non-embedded")));
+                let source = tex["source"].as_u64().ok_or("a texture without an image")? as usize;
+                let img = self.doc["images"].get(source).ok_or("image index")?;
+                let mime = img["mimeType"].as_str();
+                let png_name = img["uri"].as_str().is_some_and(|u| u.to_ascii_lowercase().ends_with(".png"));
+                if mime != Some("image/png") && !(mime.is_none() && png_name) {
+                    return Err(format!("a {} texture: only PNG is read (fit_model.py writes PNG)", mime.unwrap_or("non-PNG")));
                 }
-                Some(self.view(img["bufferView"].as_u64().ok_or("an image outside the file")? as usize)?)
+                Some(self.image(source, img)?)
             }
             None => None,
         };
@@ -288,17 +352,16 @@ impl Gltf<'_> {
         for f in factor {
             hash.write_u32(f.to_bits());
         }
-        if let Some(bytes) = png {
-            hash.write_usize(bytes.len());
-            hash.write(bytes);
+        if let Some((h, _)) = &png {
+            hash.write_u64(*h);
         }
         let key = hash.finish();
         let double_sided = m["doubleSided"].as_bool().unwrap_or(false);
         if let Some(t) = self.textures.borrow().get(&key) {
             return Ok((t.clone(), key, class, double_sided, clamp));
         }
-        let (w, h, mut rgba) = match png {
-            Some(bytes) => decode_png(bytes)?,
+        let (w, h, mut rgba) = match &png {
+            Some((_, bytes)) => decode_png(bytes)?,
             None => (1, 1, vec![255; 4]),
         };
         for p in rgba.chunks_exact_mut(4) {
@@ -311,6 +374,23 @@ impl Gltf<'_> {
         let t = Arc::new((w, h, rgba));
         self.textures.borrow_mut().insert(key, t.clone());
         Ok((t, key, class, double_sided, clamp))
+    }
+
+    /// Image `source`'s PNG bytes and their hash: once per image of this
+    /// file, and once per file beside it for the whole package.
+    fn image(&self, source: usize, img: &Value) -> R<Shared> {
+        if let Some(hit) = self.images.borrow().get(&source) {
+            return Ok(hit.clone());
+        }
+        let got = match img["uri"].as_str() {
+            Some(uri) => read_beside(&mut self.files.borrow_mut(), self.beside, uri)?,
+            None => {
+                let bytes = self.view(img["bufferView"].as_u64().ok_or("an image with no data")? as usize)?;
+                (content_hash(bytes), Arc::new(bytes.to_vec()))
+            }
+        };
+        self.images.borrow_mut().insert(source, got.clone());
+        Ok(got)
     }
 
     fn view(&self, index: usize) -> R<&[u8]> {
@@ -455,7 +535,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             continue;
         };
         let mut made: HashMap<(u64, u16, u8, bool), Handle<GsMaterial>> = HashMap::new();
-        let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb_with(&b, &mut textures)) {
+        let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb_with(&b, &mut textures, Some(&folder))) {
             Ok(n) => n,
             Err(e) => {
                 report(format!("{package}/{label}: {e}; the original stays"));
@@ -596,9 +676,43 @@ mod tests {
         assert_eq!(*p.texture, (2, 1, vec![255, 0, 0, 128, 0, 255, 0, 0]));
         // Files embedding one image share its decoding.
         let mut textures = Textures::default();
-        let a = read_glb_with(&glb, &mut textures).unwrap();
-        let b = read_glb_with(&glb, &mut textures).unwrap();
+        let a = read_glb_with(&glb, &mut textures, None).unwrap();
+        let b = read_glb_with(&glb, &mut textures, None).unwrap();
         assert!(Arc::ptr_eq(&a[0].texture, &b[0].texture) && a[0].texture_key == p.texture_key);
+        // The same file with its buffer and image beside it (share_data.py):
+        // the same parts, the image shared with the embedded one; a path
+        // out of the folder, or no folder, is refused.
+        let dir = std::env::temp_dir().join(format!("gdl-model-pack-test-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("data")).unwrap();
+        std::fs::create_dir_all(dir.join("textures")).unwrap();
+        std::fs::write(dir.join("data").join("g.bin"), &bin).unwrap();
+        std::fs::write(dir.join("textures").join("t.png"), &png).unwrap();
+        let beside = |buffer: &str, image: &str| {
+            let mut d = doc.clone();
+            d["buffers"][0]["uri"] = serde_json::json!(buffer);
+            d["images"][0] = serde_json::json!({"uri": image});
+            let mut j = serde_json::to_vec(&d).unwrap();
+            while !j.len().is_multiple_of(4) {
+                j.push(b' ');
+            }
+            let mut g = Vec::new();
+            g.extend(b"glTF");
+            g.extend(2u32.to_le_bytes());
+            g.extend(((12 + 8 + j.len()) as u32).to_le_bytes());
+            g.extend((j.len() as u32).to_le_bytes());
+            g.extend(b"JSON");
+            g.extend(&j);
+            g
+        };
+        let outside = beside("data/g.bin", "textures/t.png");
+        let c = read_glb_with(&outside, &mut textures, Some(&dir)).unwrap();
+        assert_eq!((&c[0].positions, &c[0].indices), (&p.positions, &p.indices));
+        assert!(Arc::ptr_eq(&a[0].texture, &c[0].texture));
+        assert!(read_glb(&outside).is_err_and(|e| e.contains("outside the file")));
+        for bad in ["../t.png", "textures/../t.png", "C:/t.png", "/t.png", "textures\\t.png", "data:t.png", "http://host/t.png"] {
+            assert!(read_glb_with(&beside("data/g.bin", bad), &mut Textures::default(), Some(&dir)).is_err_and(|e| e.contains("plain relative path")), "{bad}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
         // A JPEG image is refused with a message.
         let at = glb.windows(9).position(|w| w == b"image/png").unwrap();
         glb[at..at + 9].copy_from_slice(b"image/jpg");

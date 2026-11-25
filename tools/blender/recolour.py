@@ -4,7 +4,7 @@ barrel painted red and green, so the owner's barrel painted the same way
 stands in for them.
 
     blender --background --factory-startup --python tools/blender/recolour.py -- \
-        NEW.glb FROM.glb TO.glb OUT.glb [--report FILE.json] [--preview DIR]
+        NEW.glb FROM.glb TO.glb OUT.glb [--hue to|shift] [--report FILE.json] [--preview DIR]
 
 NEW.glb is a model pack file (from fit_model.py); FROM.glb and TO.glb are
 two originals of the model export with one shape and different paint (for
@@ -16,8 +16,11 @@ The change, measured and applied in HSV on the textures' coloured pixels
 (saturation and value high enough: paint and wood, not iron, seams or the
 black between a baked texture's islands), each pixel weighted by how
 coloured it is so the edges blend:
-- the hue turned so the mean hue (circular, weighted by saturation) is
-  TO's: the paint's own colour;
+- with --hue to (the default, for paint: a red or poison barrel), the hue
+  turned so the mean hue (circular, weighted by saturation) is TO's; with
+  --hue shift (one material in another realm's colour: another realm's
+  brown barrel), turned by TO's mean hue minus FROM's, so the new model
+  keeps its own tone against its original;
 - the saturation and the value scaled by the ratio of FROM's and TO's
   means, so the new model keeps its own brightness against its original.
 With --preview, the new texture beside the old one.
@@ -37,7 +40,7 @@ MAX_BYTES = 512 * 1024 * 1024
 
 def parse_args():
     a = sys.argv[sys.argv.index('--') + 1:]
-    opts = {'report': '', 'preview': ''}
+    opts = {'hue': 'to', 'report': '', 'preview': ''}
     pos = []
     while a:
         k = a.pop(0)
@@ -186,12 +189,15 @@ def main():
     a = stats(images_of(*read_glb(src), tmp, 'from'))
     b = stats(images_of(*read_glb(dst), tmp, 'to'))
     c = stats(images_of(n_doc, n_data, tmp, 'own'))
-    # The hue to TO's own (the paint's colour), the saturation and value by
-    # the originals' ratios (the new model keeps its own brightness).
-    turn = (b['hue'] - c['hue'] + 0.5) % 1.0 - 0.5
+    # The hue to TO's own (paint) or by TO's against FROM's (shift), the
+    # saturation and value by the originals' ratios (the new model keeps its
+    # own brightness).
+    if opts['hue'] not in ('to', 'shift'):
+        raise SystemExit('--hue is to or shift')
+    turn = ((b['hue'] - (c['hue'] if opts['hue'] == 'to' else a['hue'])) + 0.5) % 1.0 - 0.5
     sat = b['saturation'] / max(a['saturation'], 1e-6)
     val = b['value'] / max(a['value'], 1e-6)
-    report = {'from': a, 'to': b, 'new': c, 'hue_turn_degrees': round(turn * 360, 2), 'saturation_scale': round(sat, 4),
+    report = {'hue_mode': opts['hue'], 'from': a, 'to': b, 'new': c, 'hue_turn_degrees': round(turn * 360, 2), 'saturation_scale': round(sat, 4),
               'value_scale': round(val, 4), 'images': []}
     replace = {}
     for i, view, px in images_of(n_doc, n_data, tmp, 'new'):

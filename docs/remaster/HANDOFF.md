@@ -210,9 +210,14 @@ Commands (no window):
   breaking pieces and writes a model pack file per flip-book frame
   (decisions/0023; --inside-from for a painted model, decisions/0024).
 - `blender --background --factory-startup --python
-  tools/blender/recolour.py -- NEW.glb FROM.glb TO.glb OUT.glb [--report
-  F.json] [--preview DIR]`: paints a model pack file the way original TO
-  differs from original FROM, textures only (decisions/0024).
+  tools/blender/recolour.py -- NEW.glb FROM.glb TO.glb OUT.glb [--hue
+  to|shift] [--report F.json] [--preview DIR]`: paints a model pack file
+  the way original TO differs from original FROM, textures only
+  (decisions/0024; --hue shift for another realm's brown, decisions/0026).
+- `python tools/blender/share_data.py FOLDER [--report F.json]` (Blender's
+  own Python works): moves a package folder's embedded textures and
+  geometry to textures/ and data/ beside the files, one file per content
+  (decisions/0026). Run it last, on the folder that goes into model_pack.
 - `GDL_DEBUG_ITEM_TREES=1`: each item name's tree package, the first
   time the name is posed in a level (stderr: `item tree BAROBJ:
   Some(("ITEMS_G", 20)) in G1`). With `GDL_DEBUG_LEVEL=F2` and
@@ -365,8 +370,12 @@ later. And effects look better mostly through their textures.
    - The red and poison barrels (decisions/0024, 2026-11-24): the owner's
      barrel painted as the originals are (tools/blender/recolour.py),
      bare wood inside, the same break; checked with G1's red barrel.
-   - Next (models-plan.md M5): more props, F5 reload, and light carried
-     over from the baked scenery (option A).
+   - Every realm's barrels (decisions/0026, 2026-11-24): ten item
+     packages, 29 barrels, 754 files sharing their textures and geometry
+     (74 MB); the loader reads data beside a .glb.
+   - Next (models-plan.md M5): more props (G1's chests next, an art brief
+     first), F5 reload, and light carried over from the baked scenery
+     (option A).
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
@@ -471,3 +480,5 @@ memory. The port stays the base.
 - [ ] Red and poison barrels (decisions/0024): built 2026-11-24, the red
       one checked in G1; the poison one not seen in play yet; the
       owner's playtest next.
+- [ ] Barrels in every realm (decisions/0026): built 2026-11-24, checked
+      in G1 and A1; the owner's playtest next.
