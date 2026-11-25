@@ -78,6 +78,14 @@ Every feature below is NATIVE: a setting that is off in
 
 The owner chose A, with live light on top (see the owner's choices below).
 
+**Items have no baked light** (checked 2026-11-25 in the model export): none
+of ITEMS_G's 278 objects carries vertex colours or a lightmap, against 849
+of G1's 944 scenery objects with vertex colours. The game lights items with
+the level's sun and ambient only (present_scene_light), wherever they stand,
+and replaced items are lit the same way (decisions/0022). So option A is for
+replaced scenery (M6); an item in a dark corner is as bright as one in the
+open, in the original and in the remaster alike.
+
 ## Material types
 
 There would be a small library of surface types: stone, wood, metal,
@@ -202,8 +210,10 @@ that one job.
    2026-11-24 (the owner's playtest: "Looks good"); its breaking frames
    2026-11-24 (decisions/0023, tools/blender/break_frames.py: the fitted
    model cut into the original's pieces, each moved as the original's
-   piece moves). Still to do: light taken over from the baked scenery
-   (option A), F5 and more of the owner's props. The red and poison
+   piece moves). Still to do: F5 and more of the owner's props (G1's
+   chests: art brief 2026-11-25, docs/remaster/art-briefs/chest.md); light
+   taken over from the baked scenery (option A) comes with replaced
+   scenery, M6, since items have no baked light. The red and poison
    barrels 2026-11-24 (decisions/0024: the owner's barrel painted as the
    originals, tools/blender/recolour.py). Every realm's barrels 2026-11-24
    (decisions/0026: ten packages, files sharing their textures and

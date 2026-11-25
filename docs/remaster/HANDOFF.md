@@ -369,13 +369,18 @@ later. And effects look better mostly through their textures.
      the model pack shares one texture across the 26 files.
    - The red and poison barrels (decisions/0024, 2026-11-24): the owner's
      barrel painted as the originals are (tools/blender/recolour.py),
-     bare wood inside, the same break; checked with G1's red barrel.
+     bare wood inside, the same break; checked with G1's red barrel; the
+     owner's playtest 2026-11-25, "look like they work right".
    - Every realm's barrels (decisions/0026, 2026-11-24): ten item
      packages, 29 barrels, 754 files sharing their textures and geometry
      (74 MB); the loader reads data beside a .glb.
-   - Next (models-plan.md M5): more props (G1's chests next, an art brief
-     first), F5 reload, and light carried over from the baked scenery
-     (option A).
+   - G1's chests: the art brief written 2026-11-25
+     (docs/remaster/art-briefs/chest.md; the owner makes the picture and
+     the model). One chest shape serves every world but C (desert) and the
+     Tower (none); the lid is its own part, hinged at the back edge.
+   - Next (models-plan.md M5): the owner's chest, F5 reload. Light carried
+     over from the baked scenery (option A) is for replaced scenery (M6):
+     items have no baked light (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
@@ -477,8 +482,9 @@ memory. The port stays the base.
       2026-11-24; the owner's playtest in G1, "Looks good".
 - [ ] Breaking frames (decisions/0023): built and checked in G1
       2026-11-24; the owner's playtest next.
-- [ ] Red and poison barrels (decisions/0024): built 2026-11-24, the red
-      one checked in G1; the poison one not seen in play yet; the
-      owner's playtest next.
+- [x] Red and poison barrels (decisions/0024): built 2026-11-24, the red
+      one checked in G1; the owner's playtest 2026-11-25 with every
+      realm's barrels installed, "Poison and red barrels look like they
+      work right".
 - [ ] Barrels in every realm (decisions/0026): built 2026-11-24, checked
       in G1 and A1; the owner's playtest next.

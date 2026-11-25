@@ -59,4 +59,6 @@ about 190 MB.
   all 78 files in the pack equal the reference.
 - **Loading.** G1 to its first frames: 6.6 s with the 78 files against
   5.6 s with the pack off (twice each; reading the files).
-- **Not yet.** The owner's playtest.
+- **The owner's playtest** (2026-11-25, with every realm's barrels
+  installed, decisions/0026): "Poison and red barrels look like they work
+  right".
