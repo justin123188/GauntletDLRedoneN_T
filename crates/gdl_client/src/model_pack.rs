@@ -23,7 +23,16 @@
 //! Light: a replacement is lit live, as the game lights items (the
 //! level's sun and ambient, present_scene_light), wherever it stands. The
 //! baked light of the scenery around it (models-plan option A) comes later.
-use crate::{model_export, mip_image, texfilter, GsMaterial};
+//!
+//! Material detail (decisions/0029): a package folder's `materials.tsv`
+//! (the texture pack's table form: `<name> <type> [bump=… rough=…
+//! metal=…]`) names a file's glTF materials by their `name`; while
+//! Settings::material_detail is on, a listed material's base colour
+//! texture gets a detail map made from it for that surface type
+//! (material_maps::make_for), as the game's own textures get theirs, and
+//! shines and takes bumps under the live lights. Unlisted materials draw
+//! as before.
+use crate::{material_maps, model_export, mip_image, texfilter, GsMaterial};
 use bevy::{
     asset::RenderAssetUsages,
     mesh::{Indices, PrimitiveTopology},
@@ -74,7 +83,9 @@ as gdl_play --export-models names it (objects\\<package>\\<LABEL>.glb). Fit a\r
 new model to the original with tools\\blender\\fit_model.py, which writes the\r
 file in the form the game reads (PNG textures, no compression).\r
 A package's textures and data folders hold what its .glb files share\r
-(tools\\blender\\share_data.py): keep them with the files.\r
+(tools\\blender\\share_data.py): keep them with the files. A package's\r
+materials.tsv (lines \"<material name> <type>\", as the texture pack's) gives\r
+the files' materials bumps and shine with Material detail on.\r
 \r
 Read when the game starts. Collision and gameplay stay the original's. Delete\r
 a file to get the original back; F10 > Graphics > Model pack folder turns the\r
@@ -117,6 +128,8 @@ pub struct NewPart {
     pub double_sided: bool,
     /// U and V clamp to the edge (else repeat).
     pub clamp: (bool, bool),
+    /// The glTF material's `name` (materials.tsv's key).
+    pub material: Option<String>,
 }
 
 type R<T> = Result<T, String>;
@@ -308,8 +321,10 @@ impl Gltf<'_> {
             let back = |v: Vec3| [-v.x, v.y, v.z];
             let positions = positions.iter().map(|&v| back(world.transform_point3(Vec3::from_array(v)))).collect();
             let normals = normals.iter().map(|&v| back((normal_matrix * Vec3::from_array(v)).normalize_or(Vec3::Y))).collect();
-            let (texture, texture_key, class, double_sided, clamp) = self.material(p["material"].as_u64().map(|m| m as usize))?;
-            out.push(NewPart { positions, normals, uvs, indices, texture, texture_key, class, double_sided, clamp });
+            let index = p["material"].as_u64().map(|m| m as usize);
+            let (texture, texture_key, class, double_sided, clamp) = self.material(index)?;
+            let material = index.and_then(|m| self.doc["materials"].get(m)).and_then(|m| m["name"].as_str()).map(str::to_owned);
+            out.push(NewPart { positions, normals, uvs, indices, texture, texture_key, class, double_sided, clamp, material });
         }
         Ok(())
     }
@@ -525,6 +540,11 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     // its decoding, its image and, per object, its material.
     let mut textures = Textures::default();
     let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
+    // NATIVE (decisions/0029): the materials materials.tsv names get
+    // detail maps, made once per texture and type (only while material
+    // detail is on, as for the game's own textures: the next level's).
+    let table = if material_maps::enabled() { read_table(&folder, package) } else { HashMap::new() };
+    let mut details: HashMap<(u64, u16, DetailKey), Handle<Image>> = HashMap::new();
     for (index, stem, label, _) in model_export::object_files(objects) {
         let path = folder.join(format!("{stem}.glb"));
         if !path.is_file() {
@@ -534,7 +554,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             report(format!("{package}/{label}: the original has no drawn part; not replaced"));
             continue;
         };
-        let mut made: HashMap<(u64, u16, u8, bool), Handle<GsMaterial>> = HashMap::new();
+        let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb_with(&b, &mut textures, Some(&folder))) {
             Ok(n) => n,
             Err(e) => {
@@ -554,7 +574,9 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; n])
                 .with_inserted_indices(Indices::U32(p.indices));
             let flags: u16 = if p.clamp.0 { 4 } else { 0 } | if p.clamp.1 { 8 } else { 0 };
-            let shared = (p.texture_key, flags, p.class, p.double_sided);
+            let line = p.material.as_deref().and_then(|n| table.get(n)).filter(|l| l.kind != material_maps::Kind::None).cloned();
+            let detail_key = line.as_ref().map(detail_key);
+            let shared = (p.texture_key, flags, p.class, p.double_sided, detail_key);
             if let Some(m) = made.get(&shared) {
                 list.push((meshes.add(mesh), m.clone()));
                 continue;
@@ -588,12 +610,62 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 _ => AlphaMode::Blend,
             };
             m.draw.cull = !p.double_sided;
+            if let (Some(line), Some(k)) = (line, detail_key) {
+                let detail = details
+                    .entry((p.texture_key, flags, k))
+                    .or_insert_with(|| {
+                        let (w, h, rgba) = &*p.texture;
+                        // The texture's own texels set the bump's scale
+                        // (no disc record behind it).
+                        let src = material_maps::Source { name: p.material.as_deref().unwrap_or(""), label: "", width: *w, height: *h, rgba, record_width: *w, flags };
+                        images.add(material_maps::image(&material_maps::make_for(&src, line.clone()), flags))
+                    })
+                    .clone();
+                m.detail = Some(detail);
+                m.params.depth.y = 1.0;
+                m.params.depth.z = material_maps::special(line.kind, Some(p.class));
+            }
             let m = materials.add(m);
             made.insert(shared, m.clone());
             list.push((meshes.add(mesh), m));
         }
         report(format!("{package}/{label}: {triangles} triangles in {} parts from {}", list.len(), path.display()));
         parts.insert(index, list);
+    }
+}
+
+/// A materials.tsv line as a key: its type and values.
+type DetailKey = (material_maps::Kind, Option<u32>, Option<u32>, Option<u32>);
+
+/// An object's parts drawn with one material: the texture, its address
+/// modes, the alpha class, double-sidedness and the detail line.
+type MadeKey = (u64, u16, u8, bool, Option<DetailKey>);
+
+fn detail_key(l: &material_maps::Line) -> DetailKey {
+    (l.kind, l.bump.map(f32::to_bits), l.rough.map(f32::to_bits), l.metal.map(f32::to_bits))
+}
+
+/// A package folder's materials.tsv (none: an empty table); lines not
+/// understood are reported.
+fn read_table(folder: &Path, package: &str) -> HashMap<String, material_maps::Line> {
+    let path = folder.join(material_maps::TABLE_FILE);
+    if !path.is_file() {
+        return HashMap::new();
+    }
+    match crate::bounded_read(&path) {
+        Ok(bytes) => {
+            // Names as the files' materials have them (any word up to 128
+            // bytes; case kept).
+            let (table, bad) = material_maps::parse_named(&String::from_utf8_lossy(&bytes), |name| name.len() <= 128, false);
+            if 0 < bad {
+                report(format!("{package}/{}: {bad} lines not understood", material_maps::TABLE_FILE));
+            }
+            table
+        }
+        Err(e) => {
+            report(format!("{package}/{}: {e}", material_maps::TABLE_FILE));
+            HashMap::new()
+        }
     }
 }
 
@@ -635,7 +707,7 @@ mod tests {
             "scene": 0, "scenes": [{"nodes": [0]}],
             "nodes": [{"mesh": 0, "scale": [2.0, 2.0, 2.0]}],
             "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 2, "material": 0}]}],
-            "materials": [{"alphaMode": "BLEND", "doubleSided": true, "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}],
+            "materials": [{"name": "GOLD_HEAP", "alphaMode": "BLEND", "doubleSided": true, "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}],
             "textures": [{"source": 0}],
             "images": [{"bufferView": 3, "mimeType": "image/png"}],
             "accessors": [
@@ -673,6 +745,7 @@ mod tests {
         assert_eq!(p.indices, vec![0, 1, 2]);
         assert_eq!(p.uvs, vec![[0.0, 0.0]; 3]);
         assert_eq!((p.class, p.double_sided), (2, true));
+        assert_eq!(p.material.as_deref(), Some("GOLD_HEAP"));
         assert_eq!(*p.texture, (2, 1, vec![255, 0, 0, 128, 0, 255, 0, 0]));
         // Files embedding one image share its decoding.
         let mut textures = Textures::default();

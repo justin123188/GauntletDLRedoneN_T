@@ -645,6 +645,10 @@ they do not.
     brightness.
   - At 2560×1440 the median frame takes +0.16 ms (5.40 → 5.56, uncapped).
   - G1 loads 0.1 s slower.
+- **Model pack files** (decisions/0029, 2026-11-25): a package folder's
+  `materials.tsv` names glTF materials (`<name> <type> [bump= rough=
+  metal=]`); a listed material's texture gets its detail map made for
+  that type (material_maps::make_for). Unlisted materials draw as before.
 
 ### Water effects (this fork, 2026-11-22)
 

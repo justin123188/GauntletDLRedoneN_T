@@ -246,6 +246,13 @@ impl Line {
 /// tabs or spaces, `#` to the line's end a comment. Lines whose name or
 /// type is not understood are counted, not used.
 pub fn parse_table(text: &str) -> (HashMap<String, Line>, usize) {
+    parse_named(text, |name| name.len() == 16 && name.chars().all(|c| c.is_ascii_hexdigit()), true)
+}
+
+/// The same lines with the names `ok` accepts, lowercased or kept as
+/// written: a model pack package's materials.tsv names glTF materials
+/// (decisions/0029).
+pub fn parse_named(text: &str, ok: impl Fn(&str) -> bool, lowercase: bool) -> (HashMap<String, Line>, usize) {
     let mut out = HashMap::new();
     let mut bad = 0;
     for raw in text.lines() {
@@ -258,7 +265,7 @@ pub fn parse_table(text: &str) -> (HashMap<String, Line>, usize) {
             bad += 1;
             continue;
         };
-        if name.len() != 16 || !name.chars().all(|c| c.is_ascii_hexdigit()) {
+        if !ok(name) {
             bad += 1;
             continue;
         }
@@ -276,7 +283,7 @@ pub fn parse_table(text: &str) -> (HashMap<String, Line>, usize) {
                 _ => {}
             }
         }
-        out.insert(name.to_ascii_lowercase(), entry);
+        out.insert(if lowercase { name.to_ascii_lowercase() } else { name.to_string() }, entry);
     }
     (out, bad)
 }
@@ -440,6 +447,18 @@ pub fn special(kind: Kind, class: Option<u8>) -> f32 {
 pub fn make(src: &Source) -> Detail {
     let (line, guessed) = choose(src.name, src.label);
     let inputs = inputs(src.name);
+    detail_of(src, line, guessed, inputs)
+}
+
+/// A detail map for a texture of the type `line` names, made from the
+/// texture alone (no map files, no texture pack table): a model pack
+/// file's material listed in its package's materials.tsv (model_pack,
+/// decisions/0029).
+pub fn make_for(src: &Source, line: Line) -> Detail {
+    detail_of(src, line, false, Inputs { line: None, maps: [None, None, None, None], base: None })
+}
+
+fn detail_of(src: &Source, line: Line, guessed: bool, inputs: Inputs) -> Detail {
     let kind = line.kind;
     let p = line.params();
     let flat = |inputs| Detail { width: 1, height: 1, levels: vec![FLAT.to_vec()], kind, guessed, inputs };
@@ -761,6 +780,27 @@ mod tests {
         // The chain reaches 1×1.
         assert_eq!(d.levels.len(), 4);
         assert_eq!(d.levels[3].len(), 4);
+    }
+
+    /// A model pack material (decisions/0029): the type from its line, not
+    /// a guess from the name, and no texture pack files.
+    #[test]
+    fn model_pack_materials_take_their_line() {
+        let right = texture(8, 8, |x, _| (x * 30) as u8);
+        let (table, bad) = parse_named("HEAP_A metal\nHEAP_B gem rough=0.5 bump=0\n# a comment\nHEAP_C shiny\n", |n| n.len() <= 128, false);
+        assert_eq!(bad, 1, "HEAP_C's type is not understood");
+        assert!(parse_table("HEAP_A metal\n").0.is_empty(), "texture pack names are hashes");
+        // A name that would guess wood (TREASURE) and none: the line decides.
+        let src = |name| Source { name, label: "", width: 8, height: 8, rgba: &right, record_width: 8, flags: 0xc };
+        let a = make_for(&src("CHEST_TREASURE"), table["HEAP_A"].clone());
+        assert_eq!((a.kind, a.guessed), (Kind::Metal, false));
+        let t = &a.levels[0][(3 * 8 + 4) * 4..][..4];
+        assert!(t[0] < 110 && t[3] == 255, "{t:?}");
+        let b = make_for(&src("CHEST_TREASURE"), table["HEAP_B"].clone());
+        assert_eq!(b.kind, Kind::Gem);
+        assert!(b.levels[0].chunks_exact(4).all(|t| t[3] == 0 && (125..=129).contains(&t[2])), "rough 0.5 everywhere (no bump), no metal");
+        let none = make_for(&src("X"), Line { kind: Kind::None, bump: None, rough: None, metal: None });
+        assert_eq!(none.levels, vec![FLAT.to_vec()]);
     }
 
     /// Type none is the flat 1×1 map; a cut-out's clear texels are flat

@@ -223,6 +223,12 @@ Commands (no window):
   pixels' mean colour, or one of REF's own groups' (2026-11-25, the
   owner's chest wood in the barrel's). Run on embedded files, before
   share_data.py.
+- `model_pack\<package>\materials.tsv` (decisions/0029): lines
+  `<glTF material name> <type> [bump=… rough=… metal=…]`, the texture
+  pack's form with the files' material names; with Material detail on, a
+  listed material's texture shines and takes bumps under the live lights.
+  G1's treasure heaps: metal (bump=0.9 rough=0.22) and gem (bump=0.5
+  rough=0.05), the junk stone.
 - `python tools/blender/share_data.py FOLDER [--report F.json]` (Blender's
   own Python works): moves a package folder's embedded textures and
   geometry to textures/ and data/ beside the files, one file per content
@@ -447,6 +453,11 @@ later. And effects look better mostly through their textures.
      standing out of it), and the shared layout draws identically. The
      brass treasure lids are copies of CHESTG2LID under each tree's label.
      Not installed: the owner's review of the comparison chart first.
+   - The owner on the review: "the new heaps lose a bit of the shiny".
+     The original heap textures get material detail's metal and gem maps
+     from their labels; model pack files got none. The owner's choice
+     "Real shine": decisions/0029, a package's materials.tsv gives listed
+     materials detail maps (the heaps metal and gem).
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
