@@ -83,5 +83,10 @@ the installed one, 0615073b, both with the installed model pack):
   own), K1 4,173 both.
 - **Tests.** gdl_client 83 + 5 (ground_light: the tint, the colour read).
   Clippy: nothing new.
-- **Not yet.** The owner's review of the pictures, the install and the
-  playtest.
+- **Installed** 2026-11-26 (the owner's "Yes, install"): this build (md5
+  b5daf56b); the previous one, 0615073b, kept beside it as
+  gdl_play-parallel-backup.exe; the model pack unchanged. The installed
+  game loads K1, D1 and H3 with no loader message (first update 5.4 to
+  6.0 s), and draws K1's silver and H3's tub as tested (but for the
+  HUD's "LV 1", in the font the installed game uses).
+- **Not yet.** The owner's playtest.

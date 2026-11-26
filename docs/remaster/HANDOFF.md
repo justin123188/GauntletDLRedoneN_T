@@ -517,7 +517,8 @@ later. And effects look better mostly through their textures.
      them): items also take half the hue of the ground's light, after
      VU1's cap (H3's gold firelit, K2's greener, K1's silver cooler); the
      highlights on items and characters level off at 0.4 instead of
-     blowing out to white. Built and checked, not installed.
+     blowing out to white. Installed 2026-11-26 (b5daf56b; the previous
+     build kept as gdl_play-parallel-backup.exe).
    - Next (models-plan.md M5): the owner's chest, F5 reload. Light carried
      over from the baked scenery (option A) is for replaced scenery (M6):
      items have no baked light (models-plan.md "Lighting new models").
@@ -662,5 +663,5 @@ memory. The port stays the base.
       2026-11-26 with the junk sign's fix; the owner's playtest next (a
       barrel broken open, loose pickups, the load time).
 - [ ] Items in the colour of their light and softer glints
-      (decisions/0032): built 2026-11-26 and checked at six spots; the
-      owner's review of the pictures, then the install.
+      (decisions/0032): installed 2026-11-26; the owner's playtest next
+      (treasure in coloured light, the glints, characters' armour).
