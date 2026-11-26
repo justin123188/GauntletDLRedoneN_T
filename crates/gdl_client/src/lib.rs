@@ -8,6 +8,7 @@ pub mod controls;
 pub mod enhance;
 pub mod font_page;
 pub mod glyphs;
+pub mod ground_light;
 pub mod hd;
 pub mod hud_layout;
 pub mod material_maps;
@@ -482,7 +483,10 @@ pub struct GsParams {
     pub chrome_u: Vec4,
     pub chrome_v: Vec4,
     /// x: the depth factor of a node Z modifier ([`zmod_depth_factor`];
-    /// read only by `GsDraw::depth_mod` pipelines).
+    /// read only by `GsDraw::depth_mod` pipelines). y: a detail map is
+    /// bound; z: the surface type's special (water, plants); w: NATIVE
+    /// (this fork, decisions/0027), a lit item's ground light (0 = none,
+    /// the original; gdl_client::ground_light).
     pub depth: Vec4,
 }
 

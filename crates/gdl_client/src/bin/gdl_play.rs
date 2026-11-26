@@ -2422,6 +2422,10 @@ struct MatReq {
     /// that keeps the part's own alpha mode (the gem glow: an opaque crystal
     /// blended by `ambient` lost its crisp edge).
     glow: f32,
+    /// NATIVE (this fork, decisions/0027): a lit item's share of the
+    /// level's sun and ambient, from the ground under it (0 = none, the
+    /// original; GsParams depth.w).
+    ground: f32,
     /// ProcessItems' type-10 hit flash with MBTreeSetFlags 0x4000: no
     /// lightmap, and the colour 128 × (1 + add) without the vertex colours
     /// (the reference's flash is the texture's own colour; gs.wgsl
@@ -2744,10 +2748,11 @@ fn apply_material_requests(
         let flat = r.as_ref().is_some_and(|r| r.flat);
         let zmod = r.as_ref().map_or(0, |r| r.zmod);
         let glow = r.as_ref().map_or(0.0, |r| r.glow);
-        // Requests that blend an opaque part (a Z modifier or a glow alone
-        // keeps the part's own alpha mode).
+        let ground = r.as_ref().map_or(0.0, |r| r.ground);
+        // Requests that blend an opaque part (a Z modifier, a glow or a
+        // ground light alone keeps the part's own alpha mode).
         let styled = !(image.is_none() && overlay.is_none() && 0.999 <= alpha && ambient == 0.0 && !flat && r.as_ref().is_none_or(|r| r.uv.is_none() && r.color.is_none()));
-        if !styled && zmod == 0 && glow == 0.0 {
+        if !styled && zmod == 0 && glow == 0.0 && ground == 0.0 {
             if ov.is_some() {
                 m.0 = base;
                 commands.entity(e).remove::<MatOverride>();
@@ -2799,6 +2804,10 @@ fn apply_material_requests(
             }
             if b.lit {
                 p.scale.y += ambient + glow;
+                // NATIVE (decisions/0027): the item's ground light.
+                if 0.0 < ground {
+                    p.depth.w = ground;
+                }
             } else {
                 p.scale.x += ambient + glow;
             }
@@ -3086,6 +3095,167 @@ fn present_scene_light(
                 m.params.light = light;
             } else {
                 m.params.scale.x = add;
+            }
+        }
+    }
+}
+
+/// NATIVE (this fork, decisions/0027): items take the baked light of the
+/// ground they stand on (gdl_client::ground_light). The level's ground is
+/// read from the scenery as it is drawn (opaque world parts lit by their
+/// vertex colours and lightmap, not by VU1) whenever world nodes are
+/// spawned, and each item drawn is dimmed by the shade under it
+/// (MatReq::ground, GsParams depth.w, gs.wgsl). Off
+/// (Settings::item_ground_light), nothing is requested and the materials
+/// stay the original's.
+#[derive(Resource, Default)]
+struct GroundLight {
+    ground: Option<gdl_client::ground_light::Ground>,
+    /// World nodes were spawned since the ground was read.
+    stale: bool,
+    /// Each item's factor by slot, with the place it was measured at.
+    seen: HashMap<usize, (Vec3, f32)>,
+    /// GDL_DEBUG_GROUND_LIGHT: the items reported (slot, definition).
+    logged: std::collections::HashSet<(usize, usize)>,
+}
+
+/// The world parts drawn now, as read_ground reads them.
+type GroundParts<'w, 's> = Query<'w, 's, (&'static Mesh3d, &'static MeshMaterial3d<gdl_client::GsMaterial>, &'static Transform, &'static Visibility), With<WorldNode>>;
+
+/// The level's ground from the world parts drawn now (render space).
+fn read_ground(world: &GroundParts, meshes: &Assets<Mesh>, materials: &Assets<gdl_client::GsMaterial>, images: &Assets<Image>) -> gdl_client::ground_light::Ground {
+    use bevy::mesh::{Indices, VertexAttributeValues};
+    use gdl_client::ground_light::{GroundTri, Lightmap};
+    let mut tris = Vec::new();
+    let mut lightmaps = Vec::new();
+    let mut lightmap_of: HashMap<AssetId<Image>, Option<usize>> = HashMap::new();
+    for (mesh, material, transform, vis) in world {
+        if *vis == Visibility::Hidden {
+            continue;
+        }
+        let Some(m) = materials.get(&material.0) else { continue };
+        // Baked light only: not VU1-lit (characters' and items' light, or
+        // colourless world parts), opaque (not water, glass, cut-out leaves
+        // or additive glows).
+        if m.lit || m.params.light_dir.w != 0.0 || m.alpha_mode != AlphaMode::Opaque || m.draw.additive {
+            continue;
+        }
+        let Some(mesh) = meshes.get(&mesh.0) else { continue };
+        let Some(VertexAttributeValues::Float32x3(pos)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else { continue };
+        let colours = match mesh.attribute(Mesh::ATTRIBUTE_COLOR) {
+            Some(VertexAttributeValues::Float32x4(c)) if c.len() == pos.len() => Some(c),
+            _ => None,
+        };
+        let uvs = match mesh.attribute(Mesh::ATTRIBUTE_UV_1) {
+            Some(VertexAttributeValues::Float32x2(u)) if u.len() == pos.len() => Some(u),
+            _ => None,
+        };
+        let lightmap = match (&m.lightmap, uvs) {
+            (Some(h), Some(uv)) if 0.5 < m.params.options.y => (*lightmap_of.entry(h.id()).or_insert_with(|| {
+                let img = images.get(h)?;
+                let (w, hh) = (img.width(), img.height());
+                let data = img.data.as_ref().filter(|d| d.len() == (w * hh) as usize)?;
+                lightmaps.push(Lightmap { width: w, height: hh, texels: std::sync::Arc::new(data.clone()) });
+                Some(lightmaps.len() - 1)
+            }))
+            .map(|i| (uv, i)),
+            _ => None,
+        };
+        if lightmap.is_none() && colours.is_none() {
+            continue;
+        }
+        let Some(Indices::U32(idx)) = mesh.indices() else { continue };
+        let at = |k: u32| transform.transform_point(Vec3::from_array(pos[k as usize])) * MIRROR;
+        let colour = |k: u32| colours.map_or(Vec3::ONE, |c| Vec3::new(c[k as usize][0], c[k as usize][1], c[k as usize][2]));
+        for t in idx.chunks_exact(3) {
+            if t.iter().any(|&k| k as usize >= pos.len()) {
+                continue;
+            }
+            tris.push(GroundTri {
+                corners: [at(t[0]), at(t[1]), at(t[2])],
+                colours: [colour(t[0]), colour(t[1]), colour(t[2])],
+                lightmap: lightmap.map(|(uv, i)| ([t[0], t[1], t[2]].map(|k| Vec2::from_array(uv[k as usize])), i)),
+            });
+        }
+    }
+    gdl_client::ground_light::Ground::new(tris, lightmaps)
+}
+
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn present_ground_light(
+    sim: Res<Sim>,
+    settings: Res<gdl_client::settings::Settings>,
+    added: Query<(), Added<WorldNode>>,
+    world: GroundParts,
+    slots: Query<(&Slot, &Children, &Visibility)>,
+    (children, mats, shown): (Query<&Children>, Query<&MeshMaterial3d<gdl_client::GsMaterial>>, Query<&Visibility>),
+    (meshes, materials, images): (Res<Assets<Mesh>>, Res<Assets<gdl_client::GsMaterial>>, Res<Assets<Image>>),
+    mut state: ResMut<GroundLight>,
+    mut req: ResMut<MatRequests>,
+) {
+    if !added.is_empty() {
+        state.stale = true;
+    }
+    if !settings.item_ground_light {
+        return;
+    }
+    // DEBUG GDL_DEBUG_GROUND_LIGHT=1: the ground read per level, and each
+    // item's place, ground light and factor, once.
+    static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let debug = *DEBUG.get_or_init(|| std::env::var_os("GDL_DEBUG_GROUND_LIGHT").is_some());
+    let GroundLight { ground, stale, seen, logged } = &mut *state;
+    if *stale || ground.is_none() {
+        let started = std::time::Instant::now();
+        let read = read_ground(&world, &meshes, &materials, &images);
+        if debug {
+            eprintln!("ground light: {} ground triangles, open ground {:.3}, read in {:.1} ms", read.triangles(), read.open, started.elapsed().as_secs_f64() * 1000.0);
+        }
+        *ground = Some(read);
+        *stale = false;
+        seen.clear();
+        logged.clear();
+    }
+    let Some(ground) = ground.as_ref() else { return };
+    let g = &sim.game;
+    for (slot, kids, vis) in &slots {
+        if slot.kind != SlotKind::Item || *vis == Visibility::Hidden {
+            continue;
+        }
+        let Some(r) = g.items.records.get(slot.index) else { continue };
+        let at = Vec3::from_array(r.position()) * MIRROR;
+        let f = match seen.get(&slot.index) {
+            Some(&(p, f)) if p.distance(at) < 0.05 => f,
+            _ => {
+                let light = ground.under(at);
+                let f = light.map_or(1.0, |l| gdl_client::ground_light::factor(l, ground.open));
+                if debug && logged.insert((slot.index, r.definition())) {
+                    let d = &g.items.definitions[r.definition()];
+                    let [x, y, z] = r.position();
+                    eprintln!("ground light: item {} {} ({}) at {x:.1} {y:.1} {z:.1}: ground {light:.3?}, factor {f:.3}", slot.index, String::from_utf8_lossy(d.name()), slot.key.as_deref().unwrap_or("-"));
+                }
+                seen.insert(slot.index, (at, f));
+                f
+            }
+        };
+        if 0.995 <= f {
+            continue;
+        }
+        let mut stack: Vec<Entity> = kids.iter().collect();
+        while let Some(e) = stack.pop() {
+            // Only the parts drawn: a tree's other nodes (a barrel's 26
+            // frames, a chest's hidden content node) keep the shared
+            // material (G1: 12,126 materials when every part had its own,
+            // 3,529 without).
+            if shown.get(e).is_ok_and(|v| *v == Visibility::Hidden) {
+                continue;
+            }
+            if let Ok(m) = mats.get(e)
+                && materials.get(&m.0).is_some_and(|m| m.lit && !m.draw.additive)
+            {
+                req.get(e).ground = f;
+            }
+            if let Ok(c) = children.get(e) {
+                stack.extend(c.iter());
             }
         }
     }
@@ -12543,6 +12713,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .init_resource::<MeshSpawnOrder>()
         .init_resource::<MatRequests>()
         .init_resource::<GemGlow>()
+        .init_resource::<GroundLight>()
         .init_resource::<PendingTreePsys>()
         .init_resource::<ChestNodes>()
         .init_resource::<ItemSlots>()
@@ -12620,7 +12791,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 play_menu_cues,
                 run_attract,
                 ps2_viewport,
-                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_water_clock, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, present_gem_glow, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
+                ((advance_level, (refresh_characters, test_players).chain(), net_predict).chain(), (grow_item_slots, present_world, present_see_thru).chain(), present_world_nodes, present_node_flags, (present_scene_light, present_water_clock, present_point_lights).chain(), present_distance_fade, present_camera_face, present_effect_trees, (present_item_trees, present_enemy_trees), present_camera_face_local, spawn_tree_psys, (follow_tree_psys, follow_world_psys), present_particles, present_texmods, hide_exploded_nodes, (present_critters, present_critter_meters), (present_critter_shadows, present_enemy_shadows, present_item_debris).chain(), (present_sumner, present_special_texmods, present_hold_fx, present_familiars, present_powerup_trees, present_it_sign, present_hand_objects, present_movie, present_tree_alpha, present_skins, present_player_alpha, present_compass, present_player_shadow, present_gem_glow, present_ground_light, apply_material_requests, present_weapon_trails, present_streaks).chain(), present_player).chain().run_if(playing),
                 front_text,
                 present_hud,
                 present_menu_icon,

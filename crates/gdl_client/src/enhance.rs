@@ -99,6 +99,7 @@ enum GRow {
     Water,
     Plants,
     GemGlow,
+    GroundLight,
     HdTextures,
     TexturePack,
     ModelPack,
@@ -106,7 +107,7 @@ enum GRow {
     Back,
 }
 
-const GRAPHICS: [GRow; 19] = [
+const GRAPHICS: [GRow; 20] = [
     GRow::Preset,
     GRow::TextureFilter,
     GRow::Sharpen,
@@ -121,6 +122,7 @@ const GRAPHICS: [GRow; 19] = [
     GRow::Water,
     GRow::Plants,
     GRow::GemGlow,
+    GRow::GroundLight,
     GRow::HdTextures,
     GRow::TexturePack,
     GRow::ModelPack,
@@ -326,6 +328,8 @@ impl Overlay {
                     GRow::Plants => format!("Plant effects        {}", on(s.plant_effects)),
                     // NATIVE (this fork, decisions/0018).
                     GRow::GemGlow => format!("Gem and potion glow  {}", on(s.gem_glow)),
+                    // NATIVE (this fork, decisions/0027).
+                    GRow::GroundLight => format!("Items in shade       {}", on(s.item_ground_light)),
                     GRow::HdTextures => format!(
                         "HD textures          {}",
                         match (s.hd_textures, &self.hd) {
@@ -384,6 +388,10 @@ impl Overlay {
             if GRAPHICS.get(self.cursor) == Some(&GRow::GemGlow) {
                 out.push("Gem and potion glow: crystals, runestones, gargoyle items and magic".to_string());
                 out.push("potions glow softly in their colour, and flare when picked up.".to_string());
+            }
+            if GRAPHICS.get(self.cursor) == Some(&GRow::GroundLight) {
+                out.push("Items in shade: barrels, chests and pickups take the light of the".to_string());
+                out.push("ground under them: darker in shade, still lit by torches and spells.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());
@@ -605,6 +613,7 @@ impl Overlay {
                     GRow::Water => s.water_effects = !s.water_effects,
                     GRow::Plants => s.plant_effects = !s.plant_effects,
                     GRow::GemGlow => s.gem_glow = !s.gem_glow,
+                    GRow::GroundLight => s.item_ground_light = !s.item_ground_light,
                     GRow::HdTextures => s.hd_textures = !s.hd_textures,
                     GRow::TexturePack => s.texture_pack_folder = !s.texture_pack_folder,
                     GRow::ModelPack => s.model_pack_folder = !s.model_pack_folder,

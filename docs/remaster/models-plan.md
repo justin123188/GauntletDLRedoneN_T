@@ -84,7 +84,9 @@ of G1's 944 scenery objects with vertex colours. The game lights items with
 the level's sun and ambient only (present_scene_light), wherever they stand,
 and replaced items are lit the same way (decisions/0022). So option A is for
 replaced scenery (M6); an item in a dark corner is as bright as one in the
-open, in the original and in the remaster alike.
+open in the original. The remaster's option "Items in shade"
+(decisions/0027, 2026-11-25) dims an item by the baked light of the ground
+under it, original and replaced items alike.
 
 ## Material types
 

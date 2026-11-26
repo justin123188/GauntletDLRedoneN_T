@@ -41,7 +41,9 @@ struct GsParams {
     chrome_v: vec4<f32>,
     // x: MBTreeSetZMod's depth factor (DEPTH_MOD only): the reverse-Z depth
     // near / w times 1 + zmod × −2048 / 16777470, the GS ordering of VU1's
-    // clip-z add (lib.rs zmod_depth_factor).
+    // clip-z add (lib.rs zmod_depth_factor). y: a detail map is bound, z:
+    // the surface type's special (water, plants), w: NATIVE, an item's
+    // ground light (0 = none; decisions/0027).
     depth: vec4<f32>,
 };
 
@@ -684,7 +686,15 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             }
         }
         // VU1 program A: min(ambient + light, 128) + point lights, ≤ 255.
-        let base = min(vec3(1.0), vec3(params.light.a + params.scale.y) + d * params.light.rgb);
+        var base = min(vec3(1.0), vec3(params.light.a + params.scale.y) + d * params.light.rgb);
+        // NATIVE (this fork, decisions/0027, ground_light.rs): an item in
+        // shade (depth.w; 0, the original, leaves this untouched) takes that
+        // share of the level's sun and ambient. Ambient adds (hit flashes,
+        // the gem glow) and the point lights stay whole.
+        let ground = select(1.0, params.depth.w, 0.0 < params.depth.w);
+        if 0.0 < params.depth.w {
+            base = min(vec3(1.0), vec3(params.light.a * ground + params.scale.y) + d * (params.light.rgb * ground));
+        }
         var lights = vec3(0.0);
         if detailed {
             let sc = spec_consts(rough);
@@ -693,7 +703,7 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             spec = dl.specular;
             let dn = dot(n, params.light_dir.xyz);
             if 0.0 < d && 0.0 < dn {
-                spec = spec + params.light.rgb * dn * highlight(n, params.light_dir.xyz, to_eye, sc);
+                spec = spec + params.light.rgb * ground * dn * highlight(n, params.light_dir.xyz, to_eye, sc);
             }
         } else if plant {
             lights = plant_point_lights(pl, n, in.world_position.xyz);

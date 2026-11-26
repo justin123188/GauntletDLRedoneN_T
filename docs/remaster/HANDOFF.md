@@ -227,6 +227,11 @@ Commands (no window):
   25.45, -250.8]}, {"at": 260, "damage_item": [364, 1000]}]` stands the
   player beside two red barrels and breaks 364 (363 follows); freeze at
   updates 250 to 330.
+- GDL_DEBUG_GROUND_LIGHT=1 (decisions/0027): the ground read per level
+  and each item's place, ground light and factor, once. G1's shaded spots:
+  GDL_TEST_ACTIONS `[{"at": 200, "teleport": [-24.0, 17.2, -139.0]}]` (a
+  barrel by the gate at the floor, 0.45) or `[76.0, 36.3, -292.0]` (a
+  chest at 0.53), freeze at update 260.
 - `tools/windows/g1-smash-barrel.json` (GDL_INPUT_SCRIPT): the Sorceress
   breaks the barrel above G1's start at about update 111; freeze at
   updates 113 to 150 to see the break.
@@ -378,6 +383,23 @@ later. And effects look better mostly through their textures.
      (docs/remaster/art-briefs/chest.md; the owner makes the picture and
      the model). One chest shape serves every world but C (desert) and the
      Tower (none); the lid is its own part, hinged at the back edge.
+   - The owner's chest arrived 2026-11-25, made in Blender by ChatGPT, with
+     a fitted review pack for CHEST, CHESTEXP and CHESTG2 (base and lid
+     each, 3,500 and 2,749 triangles, the original heap kept in the G2
+     base), kept in the owner's art folder outside the repository. Checked
+     in a scratch copy: the six files load, fit the original frames within
+     about 0.1 unit, and a CHESTEXP chest opens on its hinge with its time
+     bomb rising as the original's. Its look is lighter and plainer than
+     the original and the brief (pale wood, a thin dull trim, small
+     rivets); the owner decides on a revision before it goes in.
+   - The gold heap: the owner's "we should probably make a new gold heap"
+     (2026-11-25); brief docs/remaster/art-briefs/gold-heap.md, with the
+     room under the fitted lid measured (y 0.38 in the middle, 0.18 at the
+     bevels).
+   - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
+     it"): items take the baked light of the ground under them, darker in
+     shade, torches and spells still lighting them; F10 → Graphics →
+     "Items in shade". For original and replaced items alike.
    - Next (models-plan.md M5): the owner's chest, F5 reload. Light carried
      over from the baked scenery (option A) is for replaced scenery (M6):
      items have no baked light (models-plan.md "Lighting new models").
@@ -407,6 +429,11 @@ later. And effects look better mostly through their textures.
      checked) or a small own solver (AGENTS.md rule 9: the owner decides a
      new dependency); the cheap first step is the original's break turned
      away from the hit and widened by its strength.
+   - The owner's wish (2026-11-25, "Also need to add water interaction to
+     the list"): water interaction. My reading, to confirm with the owner:
+     ripples, splashes and wakes where players, enemies, missiles and
+     debris meet water (water effects, decisions/0016, already ripple the
+     surfaces). Presentation only. Not started.
 4. **Gameplay changes:** behind a "Remastered rules" option, with original
    rules kept bit-identical. Note: network play needs identical settings on
    every machine.
@@ -488,3 +515,5 @@ memory. The port stays the base.
       work right".
 - [ ] Barrels in every realm (decisions/0026): built 2026-11-24, checked
       in G1 and A1; the owner's playtest next.
+- [ ] Items in shade (decisions/0027): built 2026-11-25, checked in G1,
+      A1 and D1; the owner's playtest next.

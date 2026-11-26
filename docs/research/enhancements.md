@@ -44,6 +44,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
 | plant_effects | true | false | NATIVE (this fork): leaves, moss and grass sway; point lights shine through leaves; marked as a level loads (Plant effects, below) |
 | gem_glow | true | false | NATIVE (this fork): crystals, runestones, gargoyle items and magic potions glow in their colour and flare when picked up (Gem glow, below) |
+| item_ground_light | true | false | NATIVE (this fork): items take the baked light of the ground they stand on, darker in shade; point lights stay whole (Items in shade, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
 | hud_hide_empty | true | false | NATIVE (this fork): no panel for a player not in the game |
@@ -699,6 +700,24 @@ decisions/0018-gem-glow.md.
   (+0xd8 0x100, GrabPowerup) and lasts 0.75 s (the owner's choice; first
   the rune sparkle's one second). GDL_DEBUG_GLOW=1 lists the glowing
   items and the flares.
+
+### Items in shade (this fork, 2026-11-25)
+
+decisions/0027-items-in-shade.md.
+- **The original.** Items are lit by the level's ambient and its one
+  directional light wherever they stand (VU1 program A); the scenery's
+  light is baked (vertex colours × lightmap). A barrel in a dark corner is
+  as bright as one in the open.
+- **The option.** gdl_client::ground_light reads the level's ground from
+  the drawn world parts (opaque, baked-lit) as a level loads, and
+  measures each item's ground light with five downward rays. Against the
+  level's open ground (the light 75 % of the ground area is darker than)
+  an item in the open keeps its look and one in shade takes
+  1 − 0.8 × (1 − light / open) of the level's sun and ambient, at least
+  0.45. Point lights and ambient adds are not dimmed.
+- **How.** gdl_play present_ground_light; a MatReq `ground` → GsParams
+  depth.w → gs.wgsl (0: the original's expression).
+  GDL_DEBUG_GROUND_LIGHT=1 prints the ground and each item's factor.
 
 ## Settings overlay and keys
 
