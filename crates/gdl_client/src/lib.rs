@@ -11,6 +11,7 @@ pub mod glyphs;
 pub mod ground_light;
 pub mod hd;
 pub mod hud_layout;
+pub mod light_transfer;
 pub mod material_maps;
 pub mod menu;
 pub mod model_export;

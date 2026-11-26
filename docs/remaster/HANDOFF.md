@@ -538,7 +538,12 @@ later. And effects look better mostly through their textures.
      (the owner: terrain then goes into each level's overhaul, its
      geometry as well as its textures). The owner's choices: G1, its start
      area first. The plan (models-plan M6): light carried over to replaced
-     level objects, the collision checker, then the art brief. Light carried over from the baked
+     level objects, the collision checker, then the art brief.
+   - M6's first two steps built 2026-11-26 (decisions/0035, the owner's
+     "Yes, start them"): replaced scenery takes the original's baked light
+     (gdl_client::light_transfer), and tools/blender/check_ground.py checks
+     new ground against the collision (sink, float, holes, standing over
+     the path). Not installed; the art brief for the start area next. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -689,4 +694,5 @@ memory. The port stays the base.
 - [ ] The junk chest's props (art-briefs/junk-chest-props.md): waiting
       for the art.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
-      level's overhaul).
+      level's overhaul): the light carry-over and the checker built
+      2026-11-26 (decisions/0035); the art brief for G1's start area next.

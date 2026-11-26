@@ -252,11 +252,16 @@ that one job.
       lightmap, as ground_light reads it) from the nearest point of the
       original's surface, and the part draws as the scenery does (VU1
       program B, no lightmap). The test: a ground object replaced by its
-      own export draws as the original.
+      own export draws as the original. Built 2026-11-26 (decisions/0035):
+      within about 1.5 / 255 of the original with material detail off.
    2. **The checker** (tools/blender, also usable by the art tool): the
       new ground's surface against the level's collision layer over the
       walkable collision triangles: where it is above (feet sink) or below
-      (feet float) by more than a tolerance.
+      (feet float) by more than a tolerance. Built 2026-11-26
+      (tools/blender/check_ground.py, decisions/0035), with holes and new
+      ground standing over the path beside it. In the start area only
+      G1#005 and G1FLOOR#02 are walked on (the collision exactly on their
+      surface); the banks and the swamp bed are free.
    3. **The art brief** for the start area: new geometry for those 10
       objects in their own frames, the walkable surface within the
       tolerance of the collision, detail (ruts, roots, stones, banks)

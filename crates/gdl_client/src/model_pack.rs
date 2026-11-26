@@ -24,9 +24,11 @@
 //! it was read (`signature`) is read again, and gdl_play puts the new
 //! parts in place.
 //!
-//! Light: a replacement is lit live, as the game lights items (the
-//! level's sun and ambient, present_scene_light), wherever it stands. The
-//! baked light of the scenery around it (models-plan option A) comes later.
+//! Light: a replacement of an item or a character is lit live, as the game
+//! lights items (the level's sun and ambient, present_scene_light). A
+//! replacement of scenery drawn with baked light takes the original's
+//! (decisions/0035, models-plan option A: light_transfer), so new ground
+//! keeps the level's light.
 //!
 //! Material detail (decisions/0029): a package folder's `materials.tsv`
 //! (the texture pack's table form: `<name> <type> [bump=… rough=…
@@ -654,16 +656,26 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
         let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let mut list = Vec::new();
         let mut triangles = 0;
+        // NATIVE (decisions/0035): scenery drawn with baked light takes the
+        // original's (light_transfer: each vertex the light of the nearest
+        // point of the original's surface, drawn as the scenery draws);
+        // items and characters keep the live light.
+        let baked = !original.lit && original.params.light_dir.w.abs() < 0.5 && !original.draw.additive;
+        let source = if baked { parts.get(&index).and_then(|l| crate::light_transfer::source_of(l, meshes, materials, images)) } else { None };
         for p in new {
             triangles += p.indices.len() / 3;
             let n = p.positions.len();
             let flags = address_flags(&p);
             let line = detail_line(&table, &p);
+            let colours: Vec<[f32; 4]> = match &source {
+                Some(s) => p.positions.iter().map(|v| s.light_at(Vec3::from_array(*v)).extend(1.0).to_array()).collect(),
+                None => vec![[1.0f32; 4]; n],
+            };
             let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p.positions)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, p.normals)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
-                .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; n])
+                .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
                 .with_inserted_indices(Indices::U32(p.indices));
             let detail_key = line.as_ref().map(detail_key);
             let shared = (p.texture_key, flags, p.class, p.double_sided, detail_key);
@@ -687,7 +699,8 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             m.lightmap = None;
             m.overlay = None;
             m.detail = None;
-            m.lit = true;
+            // Lit live as items are, unless it carries the original's light.
+            m.lit = source.is_none();
             m.params.options.x = 1.0;
             m.params.options.y = 0.0;
             m.params.scale.z = 0.0;
@@ -716,7 +729,8 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             made.insert(shared, m.clone());
             list.push((meshes.add(mesh), m));
         }
-        report(format!("{package}/{label}: {triangles} triangles in {} parts from {}", list.len(), path.display()));
+        let light = if source.is_some() { ", the original's light carried over" } else { "" };
+        report(format!("{package}/{label}: {triangles} triangles in {} parts from {}{light}", list.len(), path.display()));
         parts.insert(index, list);
     }
     if std::env::var_os("GDL_FRAME_LOG").is_some() {
