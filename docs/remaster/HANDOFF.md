@@ -458,6 +458,11 @@ later. And effects look better mostly through their textures.
      from their labels; model pack files got none. The owner's choice
      "Real shine": decisions/0029, a package's materials.tsv gives listed
      materials detail maps (the heaps metal and gem).
+   - Installed 2026-11-25 (the owner's "Yes, install"): the build of
+     5930731 and, in model_pack\ITEMS_G, every treasure chest kind (the
+     heaps' files, the iron-banded chest, the brass lids as CHESTG2LID's
+     copies; shared) with the heaps' materials.tsv. The old coin heap's
+     two data files stay in the folder, unused.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -582,3 +587,5 @@ memory. The port stays the base.
 - [ ] The owner's treasure chest (decisions/0028): installed 2026-11-25;
       the owner's playtest next (open one with a key; the gold chest in
       the swamp).
+- [ ] The treasure heaps and their shine (decisions/0029): installed
+      2026-11-25 in G1; the owner's playtest next.

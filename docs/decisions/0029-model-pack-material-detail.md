@@ -72,4 +72,9 @@ the installed one, 852c95fd):
 - **Tests.** gdl_client 82 + 5 (material_maps: a model pack line decides
   the type over the name's guess, no texture pack files, an unknown type
   reported; model_pack: the material's name read).
-- **Not yet.** The owner's playtest.
+- **Installed** 2026-11-25 (the owner's "Yes, install"): this build, the
+  treasure chests and the list in model_pack\ITEMS_G; checked first in a
+  scratch copy that the list with the shared files draws as with the
+  embedded ones (A1's gem chest identical; the silver chest's area
+  identical, the burning cart's flames apart), and byte-compared after.
+- **Not yet.** The owner's playtest; the other worlds' chests.
