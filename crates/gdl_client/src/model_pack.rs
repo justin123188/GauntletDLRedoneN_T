@@ -539,12 +539,20 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     // A package's files that share a texture (a flip-book's frames) share
     // its decoding, its image and, per object, its material.
     let mut textures = Textures::default();
-    let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
     // NATIVE (decisions/0029): the materials materials.tsv names get
     // detail maps, made once per texture and type (only while material
     // detail is on, as for the game's own textures: the next level's).
     let table = if material_maps::enabled() { read_table(&folder, package) } else { HashMap::new() };
-    let mut details: HashMap<(u64, u16, DetailKey), Handle<Image>> = HashMap::new();
+    // DIAGNOSTIC (performance, with gdl_play's GDL_FRAME_LOG): the
+    // package's time reading and decoding, making the textures' mipmaps
+    // and detail maps, building the parts, and in all.
+    let started = std::time::Instant::now();
+    // 1. The files, read and decoded in order; the textures' work once per
+    // texture (and per detail line), in the order the parts first use it.
+    let mut loaded = Vec::new();
+    let mut jobs: Vec<Job> = Vec::new();
+    let mut job_of_mips: HashMap<(u64, u16), usize> = HashMap::new();
+    let mut job_of_detail: HashMap<(u64, u16, DetailKey), usize> = HashMap::new();
     for (index, stem, label, _) in model_export::object_files(objects) {
         let path = folder.join(format!("{stem}.glb"));
         if !path.is_file() {
@@ -554,7 +562,6 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             report(format!("{package}/{label}: the original has no drawn part; not replaced"));
             continue;
         };
-        let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let new = match crate::bounded_read(&path).map_err(|e| e.to_string()).and_then(|b| read_glb_with(&b, &mut textures, Some(&folder))) {
             Ok(n) => n,
             Err(e) => {
@@ -562,19 +569,57 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 continue;
             }
         };
+        for p in &new {
+            let flags = address_flags(p);
+            job_of_mips.entry((p.texture_key, flags)).or_insert_with(|| {
+                jobs.push(Job::Mips(p.texture.clone()));
+                jobs.len() - 1
+            });
+            if let Some(line) = detail_line(&table, p) {
+                job_of_detail.entry((p.texture_key, flags, detail_key(&line))).or_insert_with(|| {
+                    jobs.push(Job::Detail(p.texture.clone(), flags, line, p.material.clone().unwrap_or_default()));
+                    jobs.len() - 1
+                });
+            }
+        }
+        loaded.push((index, label, path, original, new));
+    }
+    let read = started.elapsed();
+    // 2. The textures' work (pure: the sharp filter's mipmap chains and
+    // the detail maps) on the machine's threads.
+    let mut done: Vec<Option<Done>> = run_parallel(&jobs, |job| match job {
+        Job::Mips(t) => Done::Mips(texfilter::with_chain(t.0, t.1, vec![t.2.clone()], sharp)),
+        Job::Detail(t, flags, line, name) => {
+            // The texture's own texels set the bump's scale (no disc
+            // record behind it).
+            let src = material_maps::Source { name, label: "", width: t.0, height: t.1, rgba: &t.2, record_width: t.0, flags: *flags };
+            Done::Detail(Box::new(material_maps::make_for(&src, line.clone())))
+        }
+    })
+    .into_iter()
+    .map(Some)
+    .collect();
+    let work = started.elapsed() - read;
+    // 3. The parts, in order, each image added where it is first used (as
+    // before the work went to threads).
+    let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
+    let mut details: HashMap<(u64, u16, DetailKey), Handle<Image>> = HashMap::new();
+    let files = loaded.len();
+    for (index, label, path, original, new) in loaded {
+        let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let mut list = Vec::new();
         let mut triangles = 0;
         for p in new {
             triangles += p.indices.len() / 3;
             let n = p.positions.len();
+            let flags = address_flags(&p);
+            let line = detail_line(&table, &p);
             let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p.positions)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, p.normals)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; n])
                 .with_inserted_indices(Indices::U32(p.indices));
-            let flags: u16 = if p.clamp.0 { 4 } else { 0 } | if p.clamp.1 { 8 } else { 0 };
-            let line = p.material.as_deref().and_then(|n| table.get(n)).filter(|l| l.kind != material_maps::Kind::None).cloned();
             let detail_key = line.as_ref().map(detail_key);
             let shared = (p.texture_key, flags, p.class, p.double_sided, detail_key);
             if let Some(m) = made.get(&shared) {
@@ -584,9 +629,9 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             let image = uploaded
                 .entry((p.texture_key, flags))
                 .or_insert_with(|| {
-                    let (w, h, rgba) = &*p.texture;
+                    let (w, h, _) = &*p.texture;
+                    let Some(Done::Mips(levels)) = done[job_of_mips[&(p.texture_key, flags)]].take() else { unreachable!("each texture's mipmaps are made once") };
                     let key = texfilter::TexKey { flags, levels: 1, animated: false, borrowed: false };
-                    let levels = texfilter::with_chain(*w, *h, vec![rgba.clone()], sharp);
                     let image = images.add(mip_image(*w as u16, *h as u16, levels, texfilter::sampler(key, sharp)));
                     texfilter::register(image.id(), key);
                     image
@@ -614,11 +659,8 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 let detail = details
                     .entry((p.texture_key, flags, k))
                     .or_insert_with(|| {
-                        let (w, h, rgba) = &*p.texture;
-                        // The texture's own texels set the bump's scale
-                        // (no disc record behind it).
-                        let src = material_maps::Source { name: p.material.as_deref().unwrap_or(""), label: "", width: *w, height: *h, rgba, record_width: *w, flags };
-                        images.add(material_maps::image(&material_maps::make_for(&src, line.clone()), flags))
+                        let Some(Done::Detail(d)) = done[job_of_detail[&(p.texture_key, flags, k)]].take() else { unreachable!("each detail map is made once") };
+                        images.add(material_maps::image(&d, flags))
                     })
                     .clone();
                 m.detail = Some(detail);
@@ -632,6 +674,71 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
         report(format!("{package}/{label}: {triangles} triangles in {} parts from {}", list.len(), path.display()));
         parts.insert(index, list);
     }
+    if std::env::var_os("GDL_FRAME_LOG").is_some() {
+        let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+        eprintln!(
+            "PERF model_pack {package} {files} files: read and decode {:.0} ms, mipmaps and detail maps {:.0} ms ({} jobs), parts {:.0} ms, all {:.0} ms",
+            ms(read),
+            ms(work),
+            jobs.len(),
+            ms(started.elapsed() - read - work),
+            ms(started.elapsed())
+        );
+    }
+}
+
+/// A part's texture address modes as TEXDEF flags (0x4 U clamp, 0x8 V).
+fn address_flags(p: &NewPart) -> u16 {
+    (if p.clamp.0 { 4 } else { 0 }) | (if p.clamp.1 { 8 } else { 0 })
+}
+
+/// The materials.tsv line of a part's material, unless none or type none.
+fn detail_line(table: &HashMap<String, material_maps::Line>, p: &NewPart) -> Option<material_maps::Line> {
+    p.material.as_deref().and_then(|n| table.get(n)).filter(|l| l.kind != material_maps::Kind::None).cloned()
+}
+
+/// A texture's work for the threads: its mipmap chain, or a detail map
+/// (the address flags, the line, the material's name).
+enum Job {
+    Mips(Texture),
+    Detail(Texture, u16, material_maps::Line, String),
+}
+
+enum Done {
+    Mips(Vec<Vec<u8>>),
+    Detail(Box<material_maps::Detail>),
+}
+
+/// `f` over `jobs` on up to the machine's threads (pure work), the results
+/// in the jobs' order.
+fn run_parallel<J: Sync, R: Send>(jobs: &[J], f: impl Fn(&J) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(jobs.len());
+    if threads <= 1 {
+        return jobs.iter().map(f).collect();
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut out: Vec<Option<R>> = (0..jobs.len()).map(|_| None).collect();
+    std::thread::scope(|s| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut mine = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(job) = jobs.get(i) else { break };
+                        mine.push((i, f(job)));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        for w in workers {
+            for (i, r) in w.join().expect("a model pack texture thread") {
+                out[i] = Some(r);
+            }
+        }
+    });
+    out.into_iter().map(|r| r.expect("every job ran")).collect()
 }
 
 /// A materials.tsv line as a key: its type and values.

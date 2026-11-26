@@ -463,6 +463,13 @@ later. And effects look better mostly through their textures.
      heaps' files, the iron-banded chest, the brass lids as CHESTG2LID's
      copies; shared) with the heaps' materials.tsv. The old coin heap's
      two data files stay in the folder, unused.
+   - Every world's chests (decisions/0030, the owner's "Yes, every
+     world"): the same 20 files and list in ITEMS_A, B, D, E, F, H, I, J,
+     K and S (the same objects, nodes and art as ITEMS_G's; not C's desert
+     chests). They made a level's load 2.3 s longer; the model pack loader
+     now makes the textures' mipmaps and detail maps on the machine's
+     threads (about 0.6 s longer). GDL_FRAME_LOG prints PERF model_pack per
+     package.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
