@@ -214,6 +214,15 @@ Commands (no window):
   to|shift] [--report F.json] [--preview DIR]`: paints a model pack file
   the way original TO differs from original FROM, textures only
   (decisions/0024; --hue shift for another realm's brown, decisions/0026).
+- `blender --background --factory-startup --python
+  tools/blender/match_colour.py -- NEW.glb REF.glb OUT.glb [--group
+  darker|lighter|all] [--ref-group all|darker|lighter] [--image NAME]...
+  [--match mean|spread] [--strength S] [--report F.json] [--preview DIR]`:
+  gives one colour group of a model pack file's textures (two groups by
+  value, saturation and hue: a chest's wood and its brass) REF's coloured
+  pixels' mean colour, or one of REF's own groups' (2026-11-25, the
+  owner's chest wood in the barrel's). Run on embedded files, before
+  share_data.py.
 - `python tools/blender/share_data.py FOLDER [--report F.json]` (Blender's
   own Python works): moves a package folder's embedded textures and
   geometry to textures/ and data/ beside the files, one file per content
@@ -392,6 +401,17 @@ later. And effects look better mostly through their textures.
      bomb rising as the original's. Its look is lighter and plainer than
      the original and the brief (pale wood, a thin dull trim, small
      rivets); the owner decides on a revision before it goes in.
+   - The owner's "Can we make the wood on the chest closer to barrel wood
+     color?" (2026-11-25): tools/blender/match_colour.py on the six files
+     (the wood group only: 78 % of a base texture, 65 % of a lid's; the
+     brass and the G2 coins unchanged; the three bases and the three lids
+     still share one texture each). Tried in a scratch G1 beside a barrel:
+     matched to the barrel's wood as a whole (hue 18.4°, value 0.38) the
+     chest is a darker red-brown; to its staves alone (--ref-group lighter:
+     19.2°, saturation 0.82, value 0.56) the chest's wood is the barrel's
+     orange-brown, the trim then standing out less; matching the spread
+     too (--match spread) was pale and blotchy, not used. The owner
+     chooses; not installed.
    - The gold heap: the owner's "we should probably make a new gold heap"
      (2026-11-25); brief docs/remaster/art-briefs/gold-heap.md, with the
      room under the fitted lid measured (y 0.38 in the middle, 0.18 at the
