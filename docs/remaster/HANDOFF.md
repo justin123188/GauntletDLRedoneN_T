@@ -410,8 +410,9 @@ later. And effects look better mostly through their textures.
      chest is a darker red-brown; to its staves alone (--ref-group lighter:
      19.2°, saturation 0.82, value 0.56) the chest's wood is the barrel's
      orange-brown, the trim then standing out less; matching the spread
-     too (--match spread) was pale and blotchy, not used. The owner
-     chooses; not installed.
+     too (--match spread) was pale and blotchy, not used. The owner's
+     choice: "let's keep left for now" (the wood as delivered); the tool
+     stays for later.
    - The gold heap: the owner's "we should probably make a new gold heap"
      (2026-11-25); brief docs/remaster/art-briefs/gold-heap.md, with the
      room under the fitted lid measured (y 0.38 in the middle, 0.18 at the
