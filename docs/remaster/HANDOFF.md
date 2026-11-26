@@ -431,6 +431,8 @@ later. And effects look better mostly through their textures.
      (one hero class's healing attack on a chest holding a little gold)
      swaps a chest's tree to CHESTG1 (level 25) or CHESTG3 (level 50) in
      any level, so those show the original chest until their files exist.
+     Offered stand-ins (the fitted base and lid with the original heaps,
+     not possible for G4 and G5); the owner's choice: "Wait for the art".
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
