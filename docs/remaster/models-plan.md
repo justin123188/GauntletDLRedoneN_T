@@ -219,7 +219,9 @@ that one job.
    barrels 2026-11-24 (decisions/0024: the owner's barrel painted as the
    originals, tools/blender/recolour.py). Every realm's barrels 2026-11-24
    (decisions/0026: ten packages, files sharing their textures and
-   geometry through tools/blender/share_data.py).
+   geometry through tools/blender/share_data.py). Every world's chests
+   but the desert's 2026-11-25 (decisions/0030); the desert world C's
+   chests wait for its own overhaul (HANDOFF section 8, World overhauls).
 6. **M6** Replacement ground for one level, with the collision checker.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.

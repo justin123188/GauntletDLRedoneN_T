@@ -14,7 +14,9 @@ What the worlds' item packages hold (read 2026-11-25):
   inside and B's chest back 0.02 (the same pictures in each package's own
   texture data).
 - **Not the same:** the desert world C (CHESTDES*: another chest, CHESTEXP
-  and CHESTG* as two-part DESCH objects) and the Tower (no chests).
+  and CHESTG* as two-part DESCH objects) and the Tower (no chests). C's
+  chests wait for the desert world's own overhaul (the owner, 2026-11-26;
+  HANDOFF section 8, World overhauls).
 - ITEMS_I has chests and no barrels: a model pack folder of its own.
 
 Decision: each of those ten packages' model_pack folder gets G1's 20

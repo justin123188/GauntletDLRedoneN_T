@@ -516,6 +516,19 @@ later. And effects look better mostly through their textures.
    rules kept bit-identical. Note: network play needs identical settings on
    every machine.
 
+**World overhauls** (the owner, 2026-11-26: each world gets its own
+overhaul when we get to it). What waits for each world's own overhaul:
+- **C, the desert:** its treasure chests, which the other worlds' new
+  chests (decisions/0028 to 0030) do not cover. ITEMS_C has 25 chest
+  objects of its own design (the model export's labels): CHESTDESCHESTBO
+  and CHESTDESCHESTLI, CHESTSDESCHESTB and CHESTSDESCHESTL,
+  CHESTEXPDESC, CHESTG0DESCH to CHESTG5DESCH and CHESTSGDESCH (each in
+  two parts, #0 and #1), CHESTEXPFRM1, CHESTGEXP0, CHESTSEXP0, CHESTNULL1
+  and CHESTSNULL1. Not read yet: their tree nodes (the lid's hinge),
+  their sizes and whether their treasure textures are the other worlds'.
+  So C needs its own art brief, measured as chest.md and
+  treasure-heaps.md were. ITEMS_C has no barrels (decisions/0026).
+
 **PCSX2 was discussed and set aside.** It already has a widescreen patch for
 SLUS-20047 (`PCSX2/pcsx2_patches`, `SLUS-20047_15030637.pnach`), upscaling
 and texture replacement. A camera mod there would mean pnach machine-code
@@ -603,3 +616,5 @@ memory. The port stays the base.
 - [ ] Every world's chests and the parallel loader (decisions/0030):
       installed 2026-11-26; the owner's playtest next (a chest in another
       world, and the load time).
+- [ ] World overhauls (§8): the desert world C's chests wait for C's own
+      overhaul.
