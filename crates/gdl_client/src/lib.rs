@@ -488,6 +488,9 @@ pub struct GsParams {
     /// (this fork, decisions/0027), a lit item's ground light (0 = none,
     /// the original; gdl_client::ground_light).
     pub depth: Vec4,
+    /// NATIVE (this fork, decisions/0032): with a ground light (depth.w),
+    /// its colour on the item's sun and ambient (rgb, luma 1; w 1).
+    pub ground_tint: Vec4,
 }
 
 /// MBTreeSetZMod's node Z modifier as a factor on the reverse-Z depth

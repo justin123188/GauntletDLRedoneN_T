@@ -86,7 +86,8 @@ and replaced items are lit the same way (decisions/0022). So option A is for
 replaced scenery (M6); an item in a dark corner is as bright as one in the
 open in the original. The remaster's option "Items in shade"
 (decisions/0027, 2026-11-25) dims an item by the baked light of the ground
-under it, original and replaced items alike.
+under it, original and replaced items alike, and since decisions/0032
+(2026-11-26) tints it with half that light's hue.
 
 ## Material types
 

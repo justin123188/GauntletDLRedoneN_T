@@ -390,8 +390,8 @@ impl Overlay {
                 out.push("potions glow softly in their colour, and flare when picked up.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::GroundLight) {
-                out.push("Items in shade: barrels, chests and pickups take the light of the".to_string());
-                out.push("ground under them: darker in shade, still lit by torches and spells.".to_string());
+                out.push("Items in shade: barrels, chests and pickups take the ground's light".to_string());
+                out.push("and colour: darker in shade, still lit by torches and spells.".to_string());
             }
             if GRAPHICS.get(self.cursor) == Some(&GRow::HdTextures) {
                 out.push("HD textures: made once from your disc (several minutes, about 2 GB);".to_string());

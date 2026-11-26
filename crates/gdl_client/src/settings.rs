@@ -102,9 +102,10 @@ pub struct Settings {
     /// gargoyle items and magic potions glow softly in their colour while
     /// they lie in the level, and flare when they are picked up.
     pub gem_glow: bool,
-    /// NATIVE (this fork, decisions/0027): items take the baked light of
-    /// the ground they stand on (gdl_client::ground_light), darker in
-    /// shade; the original lights every item alike.
+    /// NATIVE (this fork, decisions/0027, 0032): items take the baked light
+    /// of the ground they stand on (gdl_client::ground_light), darker in
+    /// shade and partly in its colour; the original lights every item
+    /// alike.
     pub item_ground_light: bool,
     /// Anti-aliasing by SMAA (a post-process) instead of MSAA.
     pub smaa: bool,

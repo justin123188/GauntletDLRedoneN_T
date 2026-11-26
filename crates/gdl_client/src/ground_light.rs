@@ -7,9 +7,10 @@
 //! read under each item and compared with the level's light in the open:
 //! an item in the open keeps the original's look, one in shade is dimmed
 //! (the shader scales the sun and ambient on it, not the point lights:
-//! torches and spells still light it fully). Presentation only.
+//! torches and spells still light it fully), and the sun and ambient take
+//! part of that light's colour (decisions/0032). Presentation only.
 //!
-//! The constants are NATIVE values chosen by eye (decisions/0027).
+//! The constants are NATIVE values chosen by eye (decisions/0027, 0032).
 
 use bevy::math::{Vec2, Vec3};
 use std::collections::HashMap;
@@ -86,6 +87,25 @@ pub fn factor(light: f32, open: f32) -> f32 {
         return 1.0;
     }
     (1.0 - STRENGTH * (1.0 - light / open)).clamp(FLOOR, 1.0)
+}
+
+/// How much of the ground light's colour an item takes (0 none, 1 all of
+/// it), and how far a channel of the tint may stray from 1 before its
+/// brightness is set back.
+pub const COLOUR: f32 = 0.5;
+pub const TINT_SPREAD: f32 = 0.3;
+
+/// The tint on an item's sun and ambient for ground light of colour `c`
+/// (decisions/0032): the light's hue at COLOUR strength, each channel
+/// within 1 ± TINT_SPREAD, then at luma 1 (the factor alone sets how
+/// bright). White light, or none: 1.
+pub fn tint(c: Vec3) -> Vec3 {
+    let l = luma(c);
+    if l.is_nan() || l <= 1e-3 {
+        return Vec3::ONE;
+    }
+    let t = (Vec3::ONE + (c / l - Vec3::ONE) * COLOUR).clamp(Vec3::splat(1.0 - TINT_SPREAD), Vec3::splat(1.0 + TINT_SPREAD));
+    t / luma(t)
 }
 
 /// A level's ground: its triangles, its lightmaps and a grid over x/z.
@@ -188,17 +208,22 @@ impl Ground {
     }
 
     /// The ground light under an item at render-space `at` (its origin):
-    /// the mean light of the rays that meet ground, as one number.
-    pub fn under(&self, at: Vec3) -> Option<f32> {
-        let mut sum = 0.0;
+    /// the mean light of the rays that meet ground.
+    pub fn under_colour(&self, at: Vec3) -> Option<Vec3> {
+        let mut sum = Vec3::ZERO;
         let mut n = 0;
         for (dx, dz) in [(0.0, 0.0), (SPREAD, 0.0), (-SPREAD, 0.0), (0.0, SPREAD), (0.0, -SPREAD)] {
             if let Some(l) = self.light_below(at.x + dx, at.z + dz, at.y + REACH_UP, at.y - REACH_DOWN) {
-                sum += luma(l);
+                sum += l;
                 n += 1;
             }
         }
         (0 < n).then(|| sum / n as f32)
+    }
+
+    /// The same as one number (its luma).
+    pub fn under(&self, at: Vec3) -> Option<f32> {
+        self.under_colour(at).map(luma)
     }
 }
 
@@ -246,6 +271,29 @@ mod tests {
         // Brighter than the open: unchanged.
         assert_eq!(factor(2.0, 1.0), 1.0);
         assert_eq!(factor(0.5, 0.0), 1.0);
+    }
+
+    #[test]
+    fn the_light_colours_the_tint() {
+        // White light (GS 0x80) and none: no tint.
+        assert!((tint(Vec3::ONE) - Vec3::ONE).abs().max_element() < 1e-5);
+        assert_eq!(tint(Vec3::ZERO), Vec3::ONE);
+        assert!((tint(Vec3::splat(0.3)) - Vec3::ONE).abs().max_element() < 1e-5, "grey light: dimmed by the factor, not tinted");
+        // A green light: greener at luma 1, within the spread.
+        let green = Vec3::new(0.2, 0.6, 0.2);
+        let t = tint(green);
+        assert!(t.y > 1.0 && t.x < 1.0 && (t.x - t.z).abs() < 1e-6, "{t}");
+        assert!((luma(t) - 1.0).abs() < 1e-5);
+        assert!(t.y / t.x <= (1.0 + TINT_SPREAD) / (1.0 - TINT_SPREAD) + 1e-5);
+        // A saturated red: held in by the spread.
+        let r = tint(Vec3::new(1.0, 0.0, 0.0));
+        assert!((luma(r) - 1.0).abs() < 1e-5 && r.x > r.y && (r.y - r.z).abs() < 1e-6);
+        assert!(r.x / r.y <= (1.0 + TINT_SPREAD) / (1.0 - TINT_SPREAD) + 1e-5);
+        // The ground's colour, read as its light.
+        let tris: Vec<GroundTri> = quad(0.0, 0.0, 10.0, 0.0, 1.0).into_iter().map(|t| GroundTri { colours: [green; 3], ..t }).collect();
+        let g = Ground::new(tris, Vec::new());
+        assert!((g.under_colour(Vec3::new(5.0, 0.0, 5.0)).unwrap() - green).length() < 1e-6);
+        assert!((g.under(Vec3::new(5.0, 0.0, 5.0)).unwrap() - luma(green)).abs() < 1e-6);
     }
 
     #[test]

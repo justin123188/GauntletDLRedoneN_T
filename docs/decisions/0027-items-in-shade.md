@@ -54,7 +54,8 @@ preset, on in the defaults and the Enhanced preset; F10 → Graphics →
   own).
 - **Not now.** Players and enemies (they move every frame; another step
   if wanted); a coloured ground light (only the luma is taken, so an item
-  keeps its colours).
+  keeps its colours; since decisions/0032 an item takes half the light's
+  hue too).
 
 All values are NATIVE, chosen by eye on G1 (a barrel by the gate behind
 the first fence: ground 0.183, factor 0.45; a chest at 0.53) and A1's

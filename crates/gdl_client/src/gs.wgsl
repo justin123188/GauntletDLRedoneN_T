@@ -45,6 +45,9 @@ struct GsParams {
     // the surface type's special (water, plants), w: NATIVE, an item's
     // ground light (0 = none; decisions/0027).
     depth: vec4<f32>,
+    // NATIVE (decisions/0032): with an item's ground light (depth.w), its
+    // colour on the item's sun and ambient (rgb, luma 1).
+    ground_tint: vec4<f32>,
 };
 
 // Point lights, shared by every material: position + radius, colour +
@@ -313,6 +316,11 @@ const WATER_WOBBLE: f32 = 0.08;
 // read as a white patch).
 const WATER_GLINT_MAX: f32 = 0.3;
 const WATER_GLINT: f32 = 0.5;
+// NATIVE (decisions/0032): the most the highlights add on a lit part (an
+// item, a character; not water), reached softly (glint_soft): the sharp
+// metals' highlight (rough 0.22: up to 19 × the light) saturated a broad
+// patch to white.
+const LIT_GLINT_MAX: f32 = 0.4;
 const WATER_SHADE: f32 = 2.0;
 const WATER_F0: f32 = 0.0;
 const WATER_SHEEN: f32 = 1.0;
@@ -349,6 +357,16 @@ const SPEC_MIN: f32 = 0.05;
 fn spec_consts(rough: f32) -> vec2<f32> {
     let s = spec_scale(rough);
     return vec2(spec_power(rough), select(0.0, s, SPEC_MIN <= s));
+}
+
+// Highlights `s` towards at most `m` (their brightest channel), keeping
+// their colour: about as they are while faint, m × (1 − e^(−peak / m)).
+fn glint_soft(s: vec3<f32>, m: f32) -> vec3<f32> {
+    let peak = max(s.r, max(s.g, s.b));
+    if peak <= 0.0 {
+        return s;
+    }
+    return s * (m * (1.0 - exp(-peak / m)) / peak);
 }
 
 // One light's highlight: towards it `l`, towards the eye `v`.
@@ -689,11 +707,17 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
         var base = min(vec3(1.0), vec3(params.light.a + params.scale.y) + d * params.light.rgb);
         // NATIVE (this fork, decisions/0027, ground_light.rs): an item in
         // shade (depth.w; 0, the original, leaves this untouched) takes that
-        // share of the level's sun and ambient. Ambient adds (hit flashes,
-        // the gem glow) and the point lights stay whole.
-        let ground = select(1.0, params.depth.w, 0.0 < params.depth.w);
+        // share of the level's sun and ambient, in the colour of the light
+        // there (ground_tint, decisions/0032) after VU1's cap (most items
+        // in the open reach it: a tint inside it was cut away). Ambient adds
+        // (hit flashes, the gem glow) and the point lights stay whole; with
+        // a tint of 1 this is the cap of decisions/0027.
+        var ground = vec3(1.0);
         if 0.0 < params.depth.w {
-            base = min(vec3(1.0), vec3(params.light.a * ground + params.scale.y) + d * (params.light.rgb * ground));
+            let g = params.depth.w;
+            ground = params.ground_tint.rgb * g;
+            let sun_amb = min(vec3(1.0), vec3(params.light.a * g) + d * (params.light.rgb * g)) * params.ground_tint.rgb;
+            base = min(sun_amb + vec3(params.scale.y), max(sun_amb, vec3(1.0)));
         }
         var lights = vec3(0.0);
         if detailed {
@@ -704,6 +728,10 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
             let dn = dot(n, params.light_dir.xyz);
             if 0.0 < d && 0.0 < dn {
                 spec = spec + params.light.rgb * ground * dn * highlight(n, params.light_dir.xyz, to_eye, sc);
+            }
+            // Water keeps its own cap (WATER_GLINT_MAX, below).
+            if !water {
+                spec = glint_soft(spec, LIT_GLINT_MAX);
             }
         } else if plant {
             lights = plant_point_lights(pl, n, in.world_position.xyz);

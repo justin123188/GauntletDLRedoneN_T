@@ -2426,6 +2426,9 @@ struct MatReq {
     /// level's sun and ambient, from the ground under it (0 = none, the
     /// original; GsParams depth.w).
     ground: f32,
+    /// NATIVE (this fork, decisions/0032): with `ground`, the colour of
+    /// that light (GsParams ground_tint).
+    ground_tint: Vec3,
     /// ProcessItems' type-10 hit flash with MBTreeSetFlags 0x4000: no
     /// lightmap, and the colour 128 × (1 + add) without the vertex colours
     /// (the reference's flash is the texture's own colour; gs.wgsl
@@ -2749,6 +2752,7 @@ fn apply_material_requests(
         let zmod = r.as_ref().map_or(0, |r| r.zmod);
         let glow = r.as_ref().map_or(0.0, |r| r.glow);
         let ground = r.as_ref().map_or(0.0, |r| r.ground);
+        let ground_tint = r.as_ref().map_or(Vec3::ONE, |r| r.ground_tint);
         // Requests that blend an opaque part (a Z modifier, a glow or a
         // ground light alone keeps the part's own alpha mode).
         let styled = !(image.is_none() && overlay.is_none() && 0.999 <= alpha && ambient == 0.0 && !flat && r.as_ref().is_none_or(|r| r.uv.is_none() && r.color.is_none()));
@@ -2804,9 +2808,11 @@ fn apply_material_requests(
             }
             if b.lit {
                 p.scale.y += ambient + glow;
-                // NATIVE (decisions/0027): the item's ground light.
+                // NATIVE (decisions/0027, 0032): the item's ground light
+                // and its colour.
                 if 0.0 < ground {
                     p.depth.w = ground;
+                    p.ground_tint = ground_tint.extend(1.0);
                 }
             } else {
                 p.scale.x += ambient + glow;
@@ -2819,7 +2825,7 @@ fn apply_material_requests(
             } else {
                 (b.lightmap.clone(), b.lit)
             };
-            let params_changed = cur.params.tint != p.tint || cur.params.scale != p.scale || cur.params.light != p.light || cur.params.light_dir != p.light_dir || cur.params.options != p.options || cur.params.extra != p.extra || cur.params.chrome_u != p.chrome_u || cur.params.chrome_v != p.chrome_v || cur.params.uv_xform != p.uv_xform || cur.params.depth != p.depth;
+            let params_changed = cur.params.tint != p.tint || cur.params.scale != p.scale || cur.params.light != p.light || cur.params.light_dir != p.light_dir || cur.params.options != p.options || cur.params.extra != p.extra || cur.params.chrome_u != p.chrome_u || cur.params.chrome_v != p.chrome_v || cur.params.uv_xform != p.uv_xform || cur.params.depth != p.depth || cur.params.ground_tint != p.ground_tint;
             if (cur.base != img || cur.overlay != overlay || params_changed || cur.lightmap != lightmap || cur.lit != lit || cur.draw != draw || cur.alpha_mode != alpha_mode)
                 && let Some(own) = materials.get_mut(&m.0)
             {
@@ -3113,8 +3119,9 @@ struct GroundLight {
     ground: Option<gdl_client::ground_light::Ground>,
     /// World nodes were spawned since the ground was read.
     stale: bool,
-    /// Each item's factor by slot, with the place it was measured at.
-    seen: HashMap<usize, (Vec3, f32)>,
+    /// Each item's factor and tint by slot, with the place they were
+    /// measured at.
+    seen: HashMap<usize, (Vec3, f32, Vec3)>,
     /// GDL_DEBUG_GROUND_LIGHT: the items reported (slot, definition).
     logged: std::collections::HashSet<(usize, usize)>,
 }
@@ -3223,21 +3230,24 @@ fn present_ground_light(
         }
         let Some(r) = g.items.records.get(slot.index) else { continue };
         let at = Vec3::from_array(r.position()) * MIRROR;
-        let f = match seen.get(&slot.index) {
-            Some(&(p, f)) if p.distance(at) < 0.05 => f,
+        let (f, tint) = match seen.get(&slot.index) {
+            Some(&(p, f, tint)) if p.distance(at) < 0.05 => (f, tint),
             _ => {
-                let light = ground.under(at);
+                let colour = ground.under_colour(at);
+                let light = colour.map(gdl_client::ground_light::luma);
                 let f = light.map_or(1.0, |l| gdl_client::ground_light::factor(l, ground.open));
+                let tint = colour.map_or(Vec3::ONE, gdl_client::ground_light::tint);
                 if debug && logged.insert((slot.index, r.definition())) {
                     let d = &g.items.definitions[r.definition()];
                     let [x, y, z] = r.position();
-                    eprintln!("ground light: item {} {} ({}) at {x:.1} {y:.1} {z:.1}: ground {light:.3?}, factor {f:.3}", slot.index, String::from_utf8_lossy(d.name()), slot.key.as_deref().unwrap_or("-"));
+                    eprintln!("ground light: item {} {} ({}) at {x:.1} {y:.1} {z:.1}: ground {light:.3?}, factor {f:.3}, colour {colour:.3?}, tint {tint:.3?}", slot.index, String::from_utf8_lossy(d.name()), slot.key.as_deref().unwrap_or("-"));
                 }
-                seen.insert(slot.index, (at, f));
-                f
+                seen.insert(slot.index, (at, f, tint));
+                (f, tint)
             }
         };
-        if 0.995 <= f {
+        // In the open under white light: the shared material.
+        if 0.995 <= f && (tint - Vec3::ONE).abs().max_element() < 0.01 {
             continue;
         }
         let mut stack: Vec<Entity> = kids.iter().collect();
@@ -3252,7 +3262,9 @@ fn present_ground_light(
             if let Ok(m) = mats.get(e)
                 && materials.get(&m.0).is_some_and(|m| m.lit && !m.draw.additive)
             {
-                req.get(e).ground = f;
+                let q = req.get(e);
+                q.ground = f;
+                q.ground_tint = tint;
             }
             if let Ok(c) = children.get(e) {
                 stack.extend(c.iter());
