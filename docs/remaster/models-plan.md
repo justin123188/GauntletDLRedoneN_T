@@ -237,6 +237,35 @@ that one job.
    like to improve terrain geometry and not just texture" (T2 above: new
    ground geometry, the collision staying the original's, the checker
    keeping the walkable surface within a tolerance of it).
+
+   **The M6 test (the owner's choices, 2026-11-26: G1, its start area
+   first).** Read 2026-11-26 from the model export (levels/G1.glb, scratch):
+   within 30 units of the hero's start (game (24.4, 0, 2.5)) G1 draws 10
+   ground objects with 194 triangles (the G1#nn pieces: GROUND_01,
+   SLOPE_01, GROUNDSIDE_01, SWAMP_03 with SWAMP_ANIMOVERLAY; G1FLOOR),
+   over 446 collision triangles (337 walkable); the rest there is plants
+   (corn, moss, marsh cards: M7). The steps:
+   1. **Light carried over (option A), in the game.** A replaced level
+      object is now lit live, as items are, and draws brighter than the
+      scenery around it (decisions/0033's K1 platform). At load, each new
+      vertex takes the original object's baked light (vertex colour ×
+      lightmap, as ground_light reads it) from the nearest point of the
+      original's surface, and the part draws as the scenery does (VU1
+      program B, no lightmap). The test: a ground object replaced by its
+      own export draws as the original.
+   2. **The checker** (tools/blender, also usable by the art tool): the
+      new ground's surface against the level's collision layer over the
+      walkable collision triangles: where it is above (feet sink) or below
+      (feet float) by more than a tolerance.
+   3. **The art brief** for the start area: new geometry for those 10
+      objects in their own frames, the walkable surface within the
+      tolerance of the collision, detail (ruts, roots, stones, banks)
+      where heroes do not walk or within the tolerance; the swamp's
+      animated overlay kept or redone (a replacement drops the original's
+      texture scrolling).
+   4. **In the game:** frozen frames, the checker's report, the
+      simulation hashes (the collision is the original's), the owner's
+      playtest; then the rest of G1, then each level in its overhaul.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.
 

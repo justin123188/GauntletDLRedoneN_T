@@ -68,4 +68,9 @@ at update 242 with the hero beside the silver pickup):
   both runs).
 - **Tests.** gdl_client 84 + 5 (model_pack: the folder's state follows
   its files).
+- **Installed** 2026-11-26 (the owner's "Yes, install"): the build of
+  decisions/0034 (bc0cda39); the previous one, b5daf56b, kept beside it as
+  gdl_play-lightcolour-backup.exe; the model pack's README.txt replaced
+  with the current text. The installed game loads K1, D1 and H3 with no
+  loader message.
 - **Not yet.** F5 from the keyboard in the owner's game.

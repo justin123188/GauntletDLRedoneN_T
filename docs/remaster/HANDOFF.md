@@ -525,7 +525,8 @@ later. And effects look better mostly through their textures.
      spawned again in place, and the item, enemy and effect slots take
      their models again. The pickups package is built once, the front
      end's serving the game (decisions/0034): about one build (0.8 s)
-     less at the first level. Built and checked, not installed.
+     less at the first level. Installed 2026-11-26 (bc0cda39; the previous
+     build kept as gdl_play-lightcolour-backup.exe).
    - The junk chest's props (CHESTG0GROUP3, 4, 5: the wheel, the brick
      corner and the pipe, which spring out when the chest opens): brief
      2026-11-26, docs/remaster/art-briefs/junk-chest-props.md, in the art
@@ -535,7 +536,9 @@ later. And effects look better mostly through their textures.
      items now take) waits for their new models (M8).
    - Next (models-plan.md M6): replacement ground for one level as a test
      (the owner: terrain then goes into each level's overhaul, its
-     geometry as well as its textures). Light carried over from the baked
+     geometry as well as its textures). The owner's choices: G1, its start
+     area first. The plan (models-plan M6): light carried over to replaced
+     level objects, the collision checker, then the art brief. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -682,8 +685,7 @@ memory. The port stays the base.
       (decisions/0032): installed 2026-11-26; the owner's playtest next
       (treasure in coloured light, the glints, characters' armour).
 - [ ] F5 for the model pack and the pickups built once (decisions/0033,
-      0034): built and checked 2026-11-26; the install, then the owner's
-      F5 from the keyboard.
+      0034): installed 2026-11-26; the owner's F5 from the keyboard next.
 - [ ] The junk chest's props (art-briefs/junk-chest-props.md): waiting
       for the art.
 - [ ] M6, replacement ground for one level (a test; terrain then in each

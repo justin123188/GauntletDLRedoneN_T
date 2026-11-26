@@ -42,5 +42,6 @@ installed one, b5daf56b):
 - **Game logic.** Simulation hashes over 600 updates of the G1 walk equal
   the reference, in the defaults and the baseline.
 - **Tests.** gdl_client 84 + 5. Clippy: nothing new.
-- **Not yet.** The install; the owner's F5 and a session's first level in
-  play.
+- **Installed** 2026-11-26 (the owner's "Yes, install"): the installed
+  game builds POWERUPS once in K1, D1 and H3, with no loader message.
+- **Not yet.** A session's first level in the owner's play.
