@@ -115,3 +115,8 @@ and silver around a bag), TREAS_GOLDGEM (gold with a helmet, a crown and
 a sword), TREAS_GEMS (gems around a bag) and TREAS_JUNK (three parts: a
 junk pile, a sign, a pipe and a brick, a broken wheel). These are what
 broken barrels and chests hold in many levels, and some lie loose.
+
+## Delivered
+
+2026-11-26: ChatGPT's two files in the art folder's
+Treasure_Barrels/review_pack/POWERUPS; checked in decisions/0031.

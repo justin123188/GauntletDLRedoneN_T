@@ -138,6 +138,13 @@ colour.
 - The look to match: `Treasure_Heaps/heaps/` and `Treasure_Heaps/textures/`
   (ChatGPT's chest heaps).
 
+## Delivered
+
+2026-11-26: ChatGPT's eight files in the art folder's
+Treasure_Pickups/review_pack/POWERUPS; checked in decisions/0031 (the
+junk sign's lettering is on its front only; the original's is on both
+faces, and the levels show its back).
+
 ## Later
 
 The junk props remade here (the sign, the pipe, the brick corner, the

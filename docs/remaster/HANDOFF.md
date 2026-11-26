@@ -491,6 +491,15 @@ later. And effects look better mostly through their textures.
      gems G5, junk G0), with their originals in the art folder's
      Treasure_Pickups. A gold chest names one as its content but shows
      its own heap; a broken barrel leaves one where it stood.
+   - Both briefs' art came back 2026-11-26 (decisions/0031): the ten
+     files are within the loader's limits and the originals' bounds,
+     load in K1, D1, I1, H3 and K2 and draw in a scratch copy (silver,
+     gold, gems, junk and the low tub seen in the levels); a
+     materials.tsv for model_pack\POWERUPS (coins and metal metal, gems
+     gem, bags cloth). The junk sign has its lettering on the front only,
+     and the levels show its back. POWERUPS is built twice (the front
+     end, the game), so the pickups add about 2.5 s to a session's first
+     level in the TEST start. Not installed: the owner's review first.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -635,7 +644,6 @@ memory. The port stays the base.
       world, and the load time).
 - [ ] World overhauls (§8): the desert world C's chests wait for C's own
       overhaul.
-- [ ] The treasure barrels (art-briefs/treasure-barrels.md): brief
-      written 2026-11-26; the art next.
-- [ ] The other six treasure pickups (art-briefs/treasure-pickups.md):
-      brief written 2026-11-26; the art next.
+- [ ] The treasure pickups (decisions/0031, both briefs): the art
+      delivered and checked 2026-11-26; the owner's review, the install
+      and the playtest next.
