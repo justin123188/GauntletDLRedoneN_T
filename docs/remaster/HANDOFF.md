@@ -433,6 +433,20 @@ later. And effects look better mostly through their textures.
      any level, so those show the original chest until their files exist.
      Offered stand-ins (the fitted base and lid with the original heaps,
      not possible for G4 and G5); the owner's choice: "Wait for the art".
+   - The heaps delivered 2026-11-25 (ChatGPT in Blender, the owner's art
+     folder, outside the repository): seven heaps (1,948 to 4,478
+     triangles, peaks 0.23 to 0.345, a buried band at y -0.079 to -0.058
+     meeting the walls) in full bases for CHESTG0..G5 and CHESTSG, and the
+     iron-banded CHESTS base with iron lids CHESTSLID and CHESTSGLID.
+     Checked here: shells, lids and the brass texture identical to the
+     installed chest's; every heap within the brief's limits; the least
+     gap under the shut lid 0.092 (G1; ChatGPT's own 0.081, sampled
+     otherwise); A1's and K1's ITEMS_A and ITEMS_K have the same tree
+     nodes; in a scratch copy A1's silver and gem chests and K1's junk and
+     coin chests open with their new heaps (the junk's original props
+     standing out of it), and the shared layout draws identically. The
+     brass treasure lids are copies of CHESTG2LID under each tree's label.
+     Not installed: the owner's review of the comparison chart first.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
