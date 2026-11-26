@@ -145,6 +145,13 @@ Treasure_Pickups/review_pack/POWERUPS; checked in decisions/0031 (the
 junk sign's lettering is on its front only; the original's is on both
 faces, and the levels show its back).
 
+The fix (the owner's "Fix the sign first", 2026-11-26; the art folder's
+Junk_Sign_Fix_Brief.md): the owner saw that the original's post rises
+into the middle of the board, so both faces are clear, where the new
+one's runs up its back. TREAS_JUNKGR#0 again, with the post centred in
+the board's thickness and the lettering on both faces, each reading the
+right way from its own side.
+
 ## Later
 
 The junk props remade here (the sign, the pipe, the brick corner, the

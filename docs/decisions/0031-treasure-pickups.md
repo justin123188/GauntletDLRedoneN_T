@@ -48,7 +48,10 @@ exports):
   treasure pickups (30 of the 40 junk) turned half a turn, so the game
   shows mostly the back: in K1 the original sign's lettering faces the
   camera, the new sign's blank back (renders of both from the front and
-  from behind agree).
+  from behind agree). The owner: the original's post rises into the
+  middle of the board (both faces clear), the new one's runs up the
+  board's back (the scratch reader: the original's post within the
+  board's thickness, the new one's 0.06 to 0.30 behind its middle).
 
 Decision: model_pack\POWERUPS gets the ten files, shared by
 tools/blender/share_data.py (24.2 MB to 13.6 MB: eight textures, ten
@@ -90,6 +93,9 @@ APPDATA, the installed build 0615073b and model pack):
   pack): G1 identical with and without the folder, and identical to the
   run of 2026-11-25; simulation hashes over 600 updates of the G1 walk
   equal the reference, in the defaults and the baseline, with the folder.
-- **Not yet.** The owner's review (the in-game pictures and ChatGPT's
-  comparisons), the install and the playtest (a barrel broken open, the
-  pickups in the levels, the load time).
+- **The owner's choice** (2026-11-26): "Fix the sign first". The fix
+  asked of ChatGPT (the art folder's Junk_Sign_Fix_Brief.md): the post
+  centred in the board, the lettering on both faces; only TREAS_JUNKGR#0
+  comes back.
+- **Not yet.** The sign's fix, then the install and the owner's playtest
+  (a barrel broken open, the pickups in the levels, the load time).
