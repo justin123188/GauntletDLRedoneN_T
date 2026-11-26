@@ -97,5 +97,21 @@ APPDATA, the installed build 0615073b and model pack):
   asked of ChatGPT (the art folder's Junk_Sign_Fix_Brief.md): the post
   centred in the board, the lettering on both faces; only TREAS_JUNKGR#0
   comes back.
-- **Not yet.** The sign's fix, then the install and the owner's playtest
-  (a barrel broken open, the pickups in the levels, the load time).
+- **The sign's fix** (delivered 2026-11-26): the post in two pieces from
+  y 0.34 to 1.77 (the original's height), within -0.065 to +0.052 of the
+  board's middle (its faces at about ±0.06 to ±0.13); the lettering on
+  both faces, each reading the right way and upright from its own side;
+  the texture byte for byte the shared one (the bags, the wheel); wood,
+  metal and stone with the first delivery's triangles (244, 1,136, 600)
+  and bounds; the loader's rules met. In K1 the sign's lettering now
+  faces the camera, as the original's; shared again, the folder keeps its
+  eight textures (13.0 MB).
+- **Installed** 2026-11-26 (the owner's "Fix the sign first", then the
+  fix): model_pack\POWERUPS as tested, byte for byte (29 files; the model
+  pack now 984 .glb, 1,307 files, 263 MB); the game unchanged (md5
+  0615073b), so removing the folder undoes it. The installed game loads
+  the ten files in K1, D1 and H3 with no loader message (the first update
+  after 7.0 to 7.3 s, the level packages read from the disk the first
+  time: ITEMS_K 2.3 s against 1.15 s cached).
+- **Not yet.** The owner's playtest (a barrel broken open, the pickups in
+  the levels, the load time).

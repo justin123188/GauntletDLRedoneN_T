@@ -503,6 +503,10 @@ later. And effects look better mostly through their textures.
      original's post rises into the middle of the board, the new one's
      runs up its back; the fix asked of ChatGPT (the art folder's
      Junk_Sign_Fix_Brief.md). Install after it.
+   - Installed 2026-11-26 with the fixed sign (the post in the board's
+     middle, the lettering on both faces): model_pack\POWERUPS, the ten
+     files shared with their materials.tsv; the model pack is now 984
+     .glb, 263 MB. The game itself is unchanged (169e530, md5 0615073b).
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -647,7 +651,6 @@ memory. The port stays the base.
       world, and the load time).
 - [ ] World overhauls (§8): the desert world C's chests wait for C's own
       overhaul.
-- [ ] The treasure pickups (decisions/0031, both briefs): the art
-      delivered and checked 2026-11-26; the junk sign's fix next
-      (Junk_Sign_Fix_Brief.md in the art folder), then the install and
-      the playtest.
+- [ ] The treasure pickups (decisions/0031, both briefs): installed
+      2026-11-26 with the junk sign's fix; the owner's playtest next (a
+      barrel broken open, loose pickups, the load time).

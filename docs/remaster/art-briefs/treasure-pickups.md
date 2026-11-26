@@ -150,7 +150,8 @@ Junk_Sign_Fix_Brief.md): the owner saw that the original's post rises
 into the middle of the board, so both faces are clear, where the new
 one's runs up its back. TREAS_JUNKGR#0 again, with the post centred in
 the board's thickness and the lettering on both faces, each reading the
-right way from its own side.
+right way from its own side. Delivered and installed the same day
+(decisions/0031).
 
 ## Later
 
