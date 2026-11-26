@@ -474,6 +474,17 @@ later. And effects look better mostly through their textures.
      169e530 (md5 0615073b) and the ten folders' chest files; the model
      pack is now 974 .glb, 254 MB. The previous build (5930731) is kept
      beside it as a backup.
+   - The treasure pickups (2026-11-26, the owner's "Might as well do the
+     pickup heaps for barrels now"): eight in the shared POWERUPS package
+     (one model pack folder for every world), TREAS_BAR1 and TREAS_BAR2
+     barrels full of gold, the other six the heaps that broken barrels and
+     chests hold. The owner: "start with the two barrels for the first
+     brief and then do the others on a 2nd". The first brief:
+     docs/remaster/art-briefs/treasure-barrels.md (the owner's barrel at
+     the treasure barrels' sizes, filled with coins), with the originals,
+     the owner's barrel and a picture of the eight pickups in the art
+     folder's Treasure_Barrels. Waiting for the art; the second brief
+     next.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -618,3 +629,6 @@ memory. The port stays the base.
       world, and the load time).
 - [ ] World overhauls (§8): the desert world C's chests wait for C's own
       overhaul.
+- [ ] The treasure barrels (art-briefs/treasure-barrels.md): brief
+      written 2026-11-26; the art next. Then the second brief, the other
+      six treasure pickups.
