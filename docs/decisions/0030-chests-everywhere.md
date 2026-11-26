@@ -55,4 +55,8 @@ APPDATA):
   read from the disk the first time: 1.9 s (B1, D1, E1, F1, H1, S1; J1
   1.6 s), the reading and decoding then 1.4 s.
 - **Tests.** gdl_client 82 + 5.
+- **Installed** 2026-11-26 (the owner's "Yes, install"): the build of this
+  change and the ten folders' files, the installed model pack byte for
+  byte the tested one; the installed game loads I1, G1 and K1 with no
+  loader message (the model pack 0.8 s in I1, 1.2 s in G1 and K1).
 - **Not yet.** The owner's playtest.

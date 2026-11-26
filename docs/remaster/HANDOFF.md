@@ -470,6 +470,10 @@ later. And effects look better mostly through their textures.
      now makes the textures' mipmaps and detail maps on the machine's
      threads (about 0.6 s longer). GDL_FRAME_LOG prints PERF model_pack per
      package.
+   - Installed 2026-11-26 (the owner's "Yes, install"): the build of
+     169e530 (md5 0615073b) and the ten folders' chest files; the model
+     pack is now 974 .glb, 254 MB. The previous build (5930731) is kept
+     beside it as a backup.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -596,3 +600,6 @@ memory. The port stays the base.
       the swamp).
 - [ ] The treasure heaps and their shine (decisions/0029): installed
       2026-11-25 in G1; the owner's playtest next.
+- [ ] Every world's chests and the parallel loader (decisions/0030):
+      installed 2026-11-26; the owner's playtest next (a chest in another
+      world, and the load time).
