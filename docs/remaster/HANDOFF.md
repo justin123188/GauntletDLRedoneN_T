@@ -483,8 +483,14 @@ later. And effects look better mostly through their textures.
      docs/remaster/art-briefs/treasure-barrels.md (the owner's barrel at
      the treasure barrels' sizes, filled with coins), with the originals,
      the owner's barrel and a picture of the eight pickups in the art
-     folder's Treasure_Barrels. Waiting for the art; the second brief
-     next.
+     folder's Treasure_Barrels. Waiting for the art. The second brief
+     (the owner's "Yes, write it"), 2026-11-26:
+     docs/remaster/art-briefs/treasure-pickups.md, the other six as the
+     chest heaps ChatGPT made poured out on the ground (each matches a
+     chest: silver CHESTG1, gold and silver G2, gold G3, gold and gems G4,
+     gems G5, junk G0), with their originals in the art folder's
+     Treasure_Pickups. A gold chest names one as its content but shows
+     its own heap; a broken barrel leaves one where it stood.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →
@@ -630,5 +636,6 @@ memory. The port stays the base.
 - [ ] World overhauls (§8): the desert world C's chests wait for C's own
       overhaul.
 - [ ] The treasure barrels (art-briefs/treasure-barrels.md): brief
-      written 2026-11-26; the art next. Then the second brief, the other
-      six treasure pickups.
+      written 2026-11-26; the art next.
+- [ ] The other six treasure pickups (art-briefs/treasure-pickups.md):
+      brief written 2026-11-26; the art next.

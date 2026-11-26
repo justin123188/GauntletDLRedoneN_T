@@ -109,9 +109,9 @@ uses the base colour.
 
 ## Next
 
-The second brief: the other six treasure pickups, TREAS_GOLD (gold coins
-around a bag), TREAS_SILVER, TREAS_GOLDSIL (gold and silver around a bag),
-TREAS_GOLDGEM (gold with a helmet, a crown and a sword), TREAS_GEMS (gems
-around a bag) and TREAS_JUNK (three parts: a junk pile, a sign, a pipe and
-a brick, a broken wheel). These are what broken barrels and chests hold
-in many levels, and some lie loose.
+The second brief (treasure-pickups.md): the other six treasure pickups,
+TREAS_GOLD (gold coins around a bag), TREAS_SILVER, TREAS_GOLDSIL (gold
+and silver around a bag), TREAS_GOLDGEM (gold with a helmet, a crown and
+a sword), TREAS_GEMS (gems around a bag) and TREAS_JUNK (three parts: a
+junk pile, a sign, a pipe and a brick, a broken wheel). These are what
+broken barrels and chests hold in many levels, and some lie loose.

@@ -224,7 +224,7 @@ that one job.
    chests wait for its own overhaul (HANDOFF section 8, World overhauls).
    The treasure pickups (the shared POWERUPS package): the treasure
    barrels' brief 2026-11-26 (art-briefs/treasure-barrels.md), the other
-   six pickups in a second brief.
+   six pickups' brief the same day (art-briefs/treasure-pickups.md).
 6. **M6** Replacement ground for one level, with the collision checker.
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.
