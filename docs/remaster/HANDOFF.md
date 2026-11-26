@@ -519,9 +519,25 @@ later. And effects look better mostly through their textures.
      highlights on items and characters level off at 0.4 instead of
      blowing out to white. Installed 2026-11-26 (b5daf56b; the previous
      build kept as gdl_play-parallel-backup.exe).
-   - Next (models-plan.md M5): the owner's chest, F5 reload. Light carried
-     over from the baked scenery (option A) is for replaced scenery (M6):
-     items have no baked light (models-plan.md "Lighting new models").
+   - F5 reloads the model pack (decisions/0033, 2026-11-26, the owner's
+     "Let's start F5 reload, the pickups change, and the junk props"):
+     changed package folders are read again, the level's changed nodes
+     spawned again in place, and the item, enemy and effect slots take
+     their models again. The pickups package is built once, the front
+     end's serving the game (decisions/0034): about one build (0.8 s)
+     less at the first level. Built and checked, not installed.
+   - The junk chest's props (CHESTG0GROUP3, 4, 5: the wheel, the brick
+     corner and the pipe, which spring out when the chest opens): brief
+     2026-11-26, docs/remaster/art-briefs/junk-chest-props.md, in the art
+     folder's Junk_Chest_Props with the three originals. Waiting for the
+     art.
+   - The owner (2026-11-26): the heroes' and enemies' light (the colour
+     items now take) waits for their new models (M8).
+   - Next (models-plan.md M6): replacement ground for one level as a test
+     (the owner: terrain then goes into each level's overhaul, its
+     geometry as well as its textures). Light carried over from the baked
+     scenery (option A) is for replaced scenery: items have no baked light
+     (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
    - Load replacements keyed to the original model packages.
    - Start with props and terrain (static; collision is separate data), then
@@ -665,3 +681,10 @@ memory. The port stays the base.
 - [ ] Items in the colour of their light and softer glints
       (decisions/0032): installed 2026-11-26; the owner's playtest next
       (treasure in coloured light, the glints, characters' armour).
+- [ ] F5 for the model pack and the pickups built once (decisions/0033,
+      0034): built and checked 2026-11-26; the install, then the owner's
+      F5 from the keyboard.
+- [ ] The junk chest's props (art-briefs/junk-chest-props.md): waiting
+      for the art.
+- [ ] M6, replacement ground for one level (a test; terrain then in each
+      level's overhaul).

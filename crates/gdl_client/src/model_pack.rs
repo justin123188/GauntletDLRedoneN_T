@@ -20,6 +20,10 @@
 //! once (decisions/0026). Space: the model export's (x negated against the
 //! original, y up, one game unit per metre), so the triangle order is kept.
 //!
+//! F5 in play (decisions/0033): a package folder whose files changed since
+//! it was read (`signature`) is read again, and gdl_play puts the new
+//! parts in place.
+//!
 //! Light: a replacement is lit live, as the game lights items (the
 //! level's sun and ambient, present_scene_light), wherever it stands. The
 //! baked light of the scenery around it (models-plan option A) comes later.
@@ -87,10 +91,51 @@ A package's textures and data folders hold what its .glb files share\r
 materials.tsv (lines \"<material name> <type>\", as the texture pack's) gives\r
 the files' materials bumps and shine with Material detail on.\r
 \r
-Read when the game starts. Collision and gameplay stay the original's. Delete\r
-a file to get the original back; F10 > Graphics > Model pack folder turns the\r
-folder off.\r
+Read when the game starts; F5 in play reads the folders whose files changed\r
+again. Collision and gameplay stay the original's. Delete a file to get the\r
+original back; F10 > Graphics > Model pack folder turns the folder off.\r
 ";
+
+/// NATIVE (F5, decisions/0033): the state of a package's folder (None
+/// without the model pack or the folder): every file below it, by its path
+/// there, its length and its modification time, hashed. F5 reads a package
+/// again when this changed.
+pub fn signature(package: &str) -> Option<u64> {
+    let folder = dir()?.join(model_export::package_dir(package));
+    folder.is_dir().then(|| folder_signature(&folder))
+}
+
+/// `signature` of a folder.
+fn folder_signature(folder: &Path) -> u64 {
+    fn walk(root: &Path, at: &Path, depth: u32, out: &mut Vec<(String, u64, u128)>) {
+        // A package's folder holds its files, textures/ and data/.
+        if 4 < depth || 100_000 < out.len() {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(at) else { return };
+        for e in entries.flatten() {
+            let (path, Ok(meta)) = (e.path(), e.metadata()) else { continue };
+            if meta.is_dir() {
+                walk(root, &path, depth + 1, out);
+                continue;
+            }
+            let rel = path.strip_prefix(root).map(|r| r.to_string_lossy().into_owned()).unwrap_or_default();
+            let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
+            out.push((rel, meta.len(), modified));
+        }
+    }
+    let mut files = Vec::new();
+    walk(folder, folder, 0, &mut files);
+    files.sort();
+    let mut h = DefaultHasher::new();
+    for (rel, len, modified) in files {
+        h.write(rel.as_bytes());
+        h.write_u8(0);
+        h.write_u64(len);
+        h.write_u128(modified);
+    }
+    h.finish()
+}
 
 /// The folder, made when missing, with its README.txt.
 pub fn ensure_dir(dir: &Path) {
@@ -897,5 +942,27 @@ mod tests {
         let at = glb.windows(9).position(|w| w == b"image/png").unwrap();
         glb[at..at + 9].copy_from_slice(b"image/jpg");
         assert!(read_glb(&glb).is_err_and(|e| e.contains("only PNG")));
+    }
+
+    #[test]
+    fn a_folder_signature_follows_its_files() {
+        let dir = std::env::temp_dir().join(format!("gdl-model-pack-sig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("textures")).unwrap();
+        let empty = folder_signature(&dir);
+        std::fs::write(dir.join("A.glb"), b"one").unwrap();
+        let one = folder_signature(&dir);
+        assert_ne!(empty, one);
+        assert_eq!(one, folder_signature(&dir), "unchanged: the same");
+        // A file beside it (textures/), a longer file, removed files.
+        std::fs::write(dir.join("textures").join("t.png"), b"t").unwrap();
+        let two = folder_signature(&dir);
+        assert_ne!(one, two);
+        std::fs::write(dir.join("A.glb"), b"one more").unwrap();
+        assert_ne!(two, folder_signature(&dir));
+        std::fs::remove_file(dir.join("textures").join("t.png")).unwrap();
+        std::fs::remove_file(dir.join("A.glb")).unwrap();
+        assert_eq!(empty, folder_signature(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

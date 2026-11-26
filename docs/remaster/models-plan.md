@@ -213,8 +213,8 @@ that one job.
    2026-11-24 (the owner's playtest: "Looks good"); its breaking frames
    2026-11-24 (decisions/0023, tools/blender/break_frames.py: the fitted
    model cut into the original's pieces, each moved as the original's
-   piece moves). Still to do: F5 and more of the owner's props (G1's
-   chests: art brief 2026-11-25, docs/remaster/art-briefs/chest.md); light
+   piece moves). Still to do: more of the owner's props (G1's chests: art
+   brief 2026-11-25, docs/remaster/art-briefs/chest.md); light
    taken over from the baked scenery (option A) comes with replaced
    scenery, M6, since items have no baked light. The red and poison
    barrels 2026-11-24 (decisions/0024: the owner's barrel painted as the
@@ -227,7 +227,16 @@ that one job.
    barrels' brief 2026-11-26 (art-briefs/treasure-barrels.md), the other
    six pickups' brief the same day (art-briefs/treasure-pickups.md); the
    art delivered, checked and installed the same day (decisions/0031).
+   F5 reloads the model pack (decisions/0033) and the pickups package is
+   built once (decisions/0034), 2026-11-26. The junk chest's props: brief
+   2026-11-26 (art-briefs/junk-chest-props.md), the junk pickup's new
+   pipe, brick and wheel in the chest props' frames.
 6. **M6** Replacement ground for one level, with the collision checker.
+   The owner (2026-11-26): M6 is a test on one level, and after it each
+   level's terrain is part of that level's own overhaul; "I would also
+   like to improve terrain geometry and not just texture" (T2 above: new
+   ground geometry, the collision staying the original's, the checker
+   keeping the walkable surface within a tolerance of it).
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.
 

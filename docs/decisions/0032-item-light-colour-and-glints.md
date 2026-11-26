@@ -53,7 +53,8 @@ present_ground_light, GsParams ground_tint, gs.wgsl):
   copper); 0.5 after it (firelit gold: the tub's mean colour 95, 63, 21
   before, 107, 59, 20 after); glints at most 0.5, then 0.4.
 - **Not now.** Players and enemies keep the level's white light (as in
-  decisions/0027); no option of its own (it is part of "Items in shade"
+  decisions/0027; the owner, 2026-11-26: until their new models come, M8);
+  no option of its own (it is part of "Items in shade"
   and material detail; the F10 help line now says "the ground's light and
   colour").
 

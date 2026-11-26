@@ -170,6 +170,11 @@ pub fn set_generated(dir: Option<PathBuf>) {
     }
 }
 
+/// The generated HD pack in use (None: off).
+pub fn generated_dir() -> Option<PathBuf> {
+    CONFIG.read().ok()?.generated.clone()
+}
+
 /// Whether a pack or a dump is configured.
 pub fn active() -> bool {
     CONFIG.read().is_ok_and(|c| c.pack.is_some() || c.generated.is_some() || c.dump.is_some())

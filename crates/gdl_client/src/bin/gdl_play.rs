@@ -405,6 +405,7 @@ fn reload_textures(
     (mut notice, mut hud_sets, front): (ResMut<ScreenNotice>, ResMut<HudSets>, Res<Front>),
     mut reprepare: Local<u8>,
     (sim, harness, mut acted): (Option<Res<Sim>>, Res<TestHarness>, Local<Option<u64>>),
+    (mut models, mut frame): (ResMut<ModelReload>, Local<u64>),
 ) {
     if 0 < *reprepare {
         *reprepare -= 1;
@@ -420,9 +421,17 @@ fn reload_textures(
         *acted = Some(s.updates);
         scripted = harness.actions.iter().any(|a| a["at"].as_u64() == Some(s.updates) && a["reload_textures"] == true);
     }
+    // DIAGNOSTIC: GDL_RELOAD_FRAMES=N,... as F5 at those rendered frames
+    // (counted from the start, as GDL_SHOT_FRAMES), also while the level
+    // is frozen (GDL_FREEZE_AT).
+    static AT: std::sync::OnceLock<Vec<u64>> = std::sync::OnceLock::new();
+    *frame += 1;
+    scripted |= AT.get_or_init(|| std::env::var("GDL_RELOAD_FRAMES").map(|v| v.split(',').filter_map(|n| n.trim().parse().ok()).collect()).unwrap_or_default()).contains(&*frame);
     if !scripted && (overlay.open || !keys.just_pressed(KeyCode::F5)) {
         return;
     }
+    // NATIVE (this fork, decisions/0033): the model pack too (reload_models).
+    models.0 = true;
     use gdl_client::texture_pack as tp;
     let line = if tp::pack_dir().is_none() && !tp::active() {
         "No texture pack in use (F10, Graphics: Texture pack folder)".to_string()
@@ -1220,7 +1229,69 @@ struct Library {
     index_of: HashMap<String, u32>,
     /// Bitmap records whose image could not be decoded (placeholders).
     unresolved: std::collections::HashSet<u16>,
+    /// NATIVE (this fork, decisions/0033): what the model pack replaced.
+    pack: PackState,
 }
+
+/// NATIVE (this fork, decisions/0033): a library's model pack state, for
+/// F5: its folder's state when it was read (model_pack::signature) and the
+/// original parts of the objects it replaced.
+#[derive(Default)]
+struct PackState {
+    sig: Option<u64>,
+    originals: HashMap<u32, Parts>,
+}
+
+/// NATIVE (this fork, decisions/0022, 0033): the model pack on a package's
+/// parts (its folder `folder`), keeping what F5 needs to do it again.
+fn apply_model_pack(
+    folder: &str,
+    objects: &Objects,
+    parts: &mut HashMap<u32, Parts>,
+    meshes: &mut Assets<Mesh>,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<gdl_client::GsMaterial>,
+) -> PackState {
+    let sig = gdl_client::model_pack::signature(folder);
+    if sig.is_none() {
+        return PackState::default();
+    }
+    let before = parts.clone();
+    gdl_client::model_pack::apply(folder, objects, parts, meshes, images, materials);
+    let originals = before.into_iter().filter(|(i, p)| parts.get(i) != Some(p)).collect();
+    PackState { sig, originals }
+}
+
+/// Each definition label's parts (the first definition of a label with
+/// parts): a library's by_label.
+fn labels_of(objects: &Objects, parts: &HashMap<u32, Parts>) -> HashMap<String, Parts> {
+    let mut by_label = HashMap::new();
+    for d in &objects.definitions {
+        if let Some(list) = parts.get(&(d.object_index as u32)) {
+            by_label.entry(d.label.clone()).or_insert_with(|| list.clone());
+        }
+    }
+    by_label
+}
+
+/// NATIVE (this fork, decisions/0034): what shapes a package library
+/// besides its files: material detail, the texture pack, the generated HD
+/// pack, a texture dump and the model pack. Not the texture filter: a
+/// switch changes every texture made so far in place (texfilter::apply,
+/// the front end's too; at start-up after setup_menu_icon).
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct BuildKey(bool, Option<std::path::PathBuf>, Option<std::path::PathBuf>, Option<std::path::PathBuf>, Option<std::path::PathBuf>);
+
+fn build_key() -> BuildKey {
+    use gdl_client::texture_pack as tp;
+    BuildKey(gdl_client::material_maps::enabled(), tp::pack_dir(), tp::generated_dir(), tp::dump_dir(), gdl_client::model_pack::dir())
+}
+
+/// NATIVE (this fork, decisions/0034): the front end's POWERUPS library
+/// (setup_menu_icon) is in Libraries, built under this key; the game's
+/// setup takes it while the key is the same.
+#[derive(Resource)]
+struct FrontPowerups(BuildKey);
 
 #[derive(Resource)]
 struct Sources {
@@ -4954,19 +5025,16 @@ fn build_library(
     let texmods = gdl_formats::animation::texmods(&pkg.anim_bytes).unwrap_or_default();
     let set = gdl_client::materials_for(&pkg.objects, &pkg.table, &pkg.textures, &texmods, images, materials);
     let (mut parts, _) = gdl_client::object_meshes(&pkg.objects, &set, materials, meshes);
-    gdl_client::model_pack::apply(name, &pkg.objects, &mut parts, meshes, images, materials);
-    assemble_library(pkg, set, parts)
+    let pack = apply_model_pack(name, &pkg.objects, &mut parts, meshes, images, materials);
+    Library { pack, ..assemble_library(pkg, set, parts) }
 }
 
 /// A package's library from its materials and object meshes.
 fn assemble_library(pkg: &Package, set: gdl_client::MaterialSet, parts: HashMap<u32, Parts>) -> Library {
-    let mut by_label = HashMap::new();
+    let by_label = labels_of(&pkg.objects, &parts);
     let mut index_of = HashMap::new();
     for d in &pkg.objects.definitions {
         index_of.entry(d.label.to_uppercase()).or_insert(d.object_index as u32);
-        if let Some(list) = parts.get(&(d.object_index as u32)) {
-            by_label.entry(d.label.clone()).or_insert_with(|| list.clone());
-        }
     }
     let texmods = gdl_formats::animation::texmods(&pkg.anim_bytes).unwrap_or_default();
     let unresolved: std::collections::HashSet<u16> = set.unresolved.iter().map(|&i| i as u16).collect();
@@ -5001,7 +5069,7 @@ fn assemble_library(pkg: &Package, set: gdl_client::MaterialSet, parts: HashMap<
         }
         label_index.entry(name).or_insert(t);
     }
-    Library { by_label, textures, record_images: set.record_images, label_index, texmods, by_index: parts, index_of, unresolved }
+    Library { by_label, textures, record_images: set.record_images, label_index, texmods, by_index: parts, index_of, unresolved, pack: PackState::default() }
 }
 
 /// The OANIM frames of a package's trees (InitOAnimList / DoObjAnimation):
@@ -5826,7 +5894,19 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<gdl_client::GsMaterial>>,
+    front_built: Option<Res<FrontPowerups>>,
 ) {
+    // NATIVE (this fork, decisions/0034): the front end's POWERUPS serves
+    // the game unless the options that shape a library changed since (the
+    // title menu's): then it is built again below, as before.
+    if let Some(f) = front_built.as_ref() {
+        let now = build_key();
+        if f.0 != now {
+            eprintln!("POWERUPS built again: the front end's under {:?}, now {now:?}", f.0);
+            libraries.0.remove("POWERUPS");
+        }
+        commands.remove_resource::<FrontPowerups>();
+    }
     let root = commands.spawn((Transform::from_scale(MIRROR), Visibility::default(), MirrorRoot)).id();
     let level_lib = spawn_level(&mut commands, root, &session, sim.game.items.records.len(), &mut meshes, &mut images, &mut materials);
     commands.insert_resource(ItemSlots(sim.game.items.records.len()));
@@ -5866,10 +5946,8 @@ fn spawn_level(
     let set = gdl_client::materials_for(&level.objects, &level.table, &level.textures, &texmods, images, materials);
     let (mut parts, _) = gdl_client::object_meshes(&level.objects, &set, materials, meshes);
     // NATIVE (this fork, decisions/0022): the level's objects in the model
-    // pack (its folder: the level's name).
-    if let Some(l) = session.levels.get(session.current) {
-        gdl_client::model_pack::apply(&l.name, &level.objects, &mut parts, meshes, images, materials);
-    }
+    // pack (its folder: the level's name; F5 again, decisions/0033).
+    let pack = session.levels.get(session.current).map(|l| apply_model_pack(&l.name, &level.objects, &mut parts, meshes, images, materials)).unwrap_or_default();
     let names: HashMap<_, _> = level.objects.definitions.iter().map(|d| (d.label.as_str(), d.object_index as u32)).collect();
     let nodes = &session.world.nodes;
     // CreateWorldNode: MB flags = record +0x18, | 4 for file flags & 0x1001
@@ -5885,8 +5963,7 @@ fn spawn_level(
         }
         f
     };
-    let mut variants: HashMap<(AssetId<gdl_client::GsMaterial>, u32, i16), Handle<gdl_client::GsMaterial>> = HashMap::new();
-    let mut lm_variants: HashMap<AssetId<gdl_client::GsMaterial>, Handle<gdl_client::GsMaterial>> = HashMap::new();
+    let mut variants = WorldVariants::default();
     if let Ok(placements) = session.world.placements() {
         let parent: HashMap<usize, usize> =
             placements.iter().filter_map(|p| p.parent.map(|q| (p.node_index as usize, q as usize))).collect();
@@ -5921,64 +5998,18 @@ fn spawn_level(
             // −2, 1). Every such node on the disc (93 in 8 levels: floor
             // decals, "…XS_…") has no children, so the walk ends at it.
             let zmod: i16 = if node.flags & 0x400 != 0 { -2 } else { 0 };
-            for (mesh, material) in list {
-                let key = (material.id(), flags & (0x800000 | 0x4000 | 0x1000 | 0x80 | 0x40), zmod);
-                // A lightmapped part whose texture is not opaque draws its
-                // lightmap as a pass of its own (GsDraw::lightmap_pass): the
-                // base keeps the texture alone.
-                let split = materials.get(material).is_some_and(|m| m.lightmap.is_some() && m.alpha_mode != AlphaMode::Opaque) && flags & 0x4000 == 0;
-                let material = variants
-                    .entry(key)
-                    .or_insert_with(|| {
-                        let mut m = materials.get(material).expect("part material").with_draw(flags).with_zmod(zmod);
-                        if split {
-                            m.params.options.y = 0.0;
-                        }
-                        materials.add(m)
-                    })
-                    .clone();
-                let lm_pass = split
-                    .then(|| {
-                        lm_variants
-                            .entry(material.id())
-                            .or_insert_with(|| {
-                                let mut base = materials.get(&material).cloned().expect("variant");
-                                base.params.options.y = 1.0;
-                                materials.add(base.lightmap_pass().expect("lightmapped"))
-                            })
-                            .clone()
-                    });
-                let mut entity = commands.spawn((
-                    Mesh3d(mesh.clone()),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(rest),
-                    WorldNode { node: i, rest },
-                    NodeChain(chain.clone()),
-                    if hidden { Visibility::Hidden } else { Visibility::Inherited },
-                    LevelEntity,
-                ));
-                if let Some((anchor, mode)) = face {
-                    let at = position.get(&anchor).copied().unwrap_or(rest);
-                    entity.insert(CameraFace { mode, anchor: at, offset: rest - at });
-                }
-                if flags & 0x100400 != 0 {
-                    // A material of its own: the alpha follows the distance.
-                    let mut m = materials.get(&variants[&key]).cloned().expect("variant");
-                    if m.alpha_mode == AlphaMode::Opaque || matches!(m.alpha_mode, AlphaMode::Mask(_)) {
-                        m.alpha_mode = AlphaMode::Blend;
-                    }
-                    let own = materials.add(m);
-                    entity.insert((MeshMaterial3d(own), DistanceFade { max: if flags & 0x100000 != 0 { 200.0 } else { 100.0 }, at: rest }));
-                }
-                let child = entity.id();
-                commands.entity(root).add_child(child);
-                // The lightmap pass: the same geometry under the part (its
-                // transform and visibility), drawn just after it.
-                if let Some(lm) = lm_pass {
-                    let pass = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(lm), Transform::IDENTITY, Visibility::Inherited)).id();
-                    commands.entity(child).add_child(pass);
-                }
-            }
+            // The parts (spawn_world_parts; F5's model reload spawns a
+            // node's parts again the same way, decisions/0033).
+            let place = WorldPlace {
+                node: i,
+                rest,
+                chain: &chain,
+                flags,
+                zmod,
+                visibility: if hidden { Visibility::Hidden } else { Visibility::Inherited },
+                face: face.map(|(anchor, mode)| (mode, position.get(&anchor).copied().unwrap_or(rest))),
+            };
+            spawn_world_parts(commands, root, materials, &mut variants, list, &place);
         }
     }
     spawn_world_psys(commands, root, session, &set, meshes);
@@ -5993,9 +6024,231 @@ fn spawn_level(
             commands.entity(root).add_child(e);
         }
     }
+    // F5's model reload spawns changed nodes with the same variants.
+    commands.insert_resource(variants);
     // The level's own objects as a library (LEVEL_LIB): ItemFindMBObjectL1
     // searches every loaded model table (E2's E2ROCKFALL#nn falling rocks).
-    assemble_library(level, set, parts)
+    Library { pack, ..assemble_library(level, set, parts) }
+}
+
+/// The material variants of the level's world parts by base material, MB
+/// draw flags and Z modifier, and their lightmap passes (spawn_level; F5's
+/// model reload spawns a node's parts again with them, decisions/0033).
+#[derive(Resource, Default)]
+struct WorldVariants {
+    variants: HashMap<(AssetId<gdl_client::GsMaterial>, u32, i16), Handle<gdl_client::GsMaterial>>,
+    lm: HashMap<AssetId<gdl_client::GsMaterial>, Handle<gdl_client::GsMaterial>>,
+}
+
+/// Where and how a world node's parts are drawn (spawn_level).
+struct WorldPlace<'a> {
+    node: usize,
+    rest: Vec3,
+    chain: &'a [(usize, u32)],
+    flags: u32,
+    zmod: i16,
+    visibility: Visibility,
+    /// CameraFace's mode and anchor.
+    face: Option<(u32, Vec3)>,
+}
+
+/// A world node's parts under `root` (CreateWorldNode): each part's material
+/// variant for the node's MB flags and Z modifier; a lightmapped part whose
+/// texture is not opaque draws its lightmap as a pass of its own; a
+/// distance-faded node (flags 0x100400) gets materials of its own.
+fn spawn_world_parts(commands: &mut Commands, root: Entity, materials: &mut Assets<gdl_client::GsMaterial>, wv: &mut WorldVariants, list: &Parts, at: &WorldPlace) {
+    let (rest, flags, zmod) = (at.rest, at.flags, at.zmod);
+    for (mesh, material) in list {
+        let key = (material.id(), flags & (0x800000 | 0x4000 | 0x1000 | 0x80 | 0x40), zmod);
+        // A lightmapped part whose texture is not opaque draws its
+        // lightmap as a pass of its own (GsDraw::lightmap_pass): the
+        // base keeps the texture alone.
+        let split = materials.get(material).is_some_and(|m| m.lightmap.is_some() && m.alpha_mode != AlphaMode::Opaque) && flags & 0x4000 == 0;
+        let material = wv
+            .variants
+            .entry(key)
+            .or_insert_with(|| {
+                let mut m = materials.get(material).expect("part material").with_draw(flags).with_zmod(zmod);
+                if split {
+                    m.params.options.y = 0.0;
+                }
+                materials.add(m)
+            })
+            .clone();
+        let lm_pass = split.then(|| {
+            wv.lm
+                .entry(material.id())
+                .or_insert_with(|| {
+                    let mut base = materials.get(&material).cloned().expect("variant");
+                    base.params.options.y = 1.0;
+                    materials.add(base.lightmap_pass().expect("lightmapped"))
+                })
+                .clone()
+        });
+        let mut entity = commands.spawn((
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material),
+            Transform::from_translation(rest),
+            WorldNode { node: at.node, rest },
+            NodeChain(at.chain.to_vec()),
+            at.visibility,
+            LevelEntity,
+        ));
+        if let Some((mode, anchor)) = at.face {
+            entity.insert(CameraFace { mode, anchor, offset: rest - anchor });
+        }
+        if flags & 0x100400 != 0 {
+            // A material of its own: the alpha follows the distance.
+            let mut m = materials.get(&wv.variants[&key]).cloned().expect("variant");
+            if m.alpha_mode == AlphaMode::Opaque || matches!(m.alpha_mode, AlphaMode::Mask(_)) {
+                m.alpha_mode = AlphaMode::Blend;
+            }
+            let own = materials.add(m);
+            entity.insert((MeshMaterial3d(own), DistanceFade { max: if flags & 0x100000 != 0 { 200.0 } else { 100.0 }, at: rest }));
+        }
+        let child = entity.id();
+        commands.entity(root).add_child(child);
+        // The lightmap pass: the same geometry under the part (its
+        // transform and visibility), drawn just after it.
+        if let Some(lm) = lm_pass {
+            let pass = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(lm), Transform::IDENTITY, Visibility::Inherited)).id();
+            commands.entity(child).add_child(pass);
+        }
+    }
+}
+
+/// NATIVE (this fork, decisions/0033): set by F5 (reload_textures) for
+/// reload_models.
+#[derive(Resource, Default)]
+struct ModelReload(bool);
+
+/// NATIVE (this fork, decisions/0033): F5 reads the model pack again. A
+/// package (or the level) whose folder changed since it was read
+/// (model_pack::signature) is replaced again from its original parts; the
+/// level's changed nodes are spawned again where they stand, with their
+/// visibility, and the slots, held effects, familiars, powerup trees, hand
+/// objects and critters take their models from the libraries again (their
+/// shown model forgotten). What else holds a package's parts (the players'
+/// shadows, the front end's icon) shows a change from the next start.
+/// Presentation only.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn reload_models(
+    mut commands: Commands,
+    mut wanted: ResMut<ModelReload>,
+    (mut libraries, sources, session): (ResMut<Libraries>, Option<Res<Sources>>, Option<Res<Session>>),
+    (mut meshes, mut images, mut materials): (ResMut<Assets<Mesh>>, ResMut<Assets<Image>>, ResMut<Assets<gdl_client::GsMaterial>>),
+    (mut notice, ground, mut world_variants): (ResMut<ScreenNotice>, Option<ResMut<GroundLight>>, Option<ResMut<WorldVariants>>),
+    (world, root): (Query<(Entity, &WorldNode, &NodeChain, &Visibility, Option<&CameraFace>)>, Query<Entity, With<MirrorRoot>>),
+    (mut slots, mut held, mut familiars, mut powerups, mut hands, mut critters): (Query<&mut Slot>, Query<&mut HoldFx>, Query<&mut Familiar>, Query<&mut PowerupTree>, Query<&mut HandObject>, Query<&mut CritterSlot>),
+) {
+    // Only in play (the front end has no session yet).
+    if !std::mem::take(&mut wanted.0) || !gdl_client::model_pack::active() {
+        return;
+    }
+    let (Some(sources), Some(session)) = (sources, session) else { return };
+    let level_folder = session.levels.get(session.current).map(|l| l.name.clone());
+    let _ = gdl_client::model_pack::take_report();
+    let mut lines = Vec::new();
+    let mut level_changed = std::collections::HashSet::new();
+    let keys: Vec<String> = libraries.0.keys().cloned().collect();
+    for key in keys {
+        let (folder, objects) = if key == LEVEL_LIB {
+            let Some(f) = &level_folder else { continue };
+            (f.clone(), &session.level.objects)
+        } else {
+            let Some(p) = sources.packages.get(&key) else { continue };
+            (key.clone(), &p.objects)
+        };
+        let Some(lib) = libraries.0.get_mut(&key) else { continue };
+        if gdl_client::model_pack::signature(&folder) == lib.pack.sig {
+            continue;
+        }
+        // The original parts, and the model pack on them again.
+        let mut parts = lib.by_index.clone();
+        for (i, p) in &lib.pack.originals {
+            parts.insert(*i, p.clone());
+        }
+        let pack = apply_model_pack(&folder, objects, &mut parts, &mut meshes, &mut images, &mut materials);
+        let restored = lib.pack.originals.keys().filter(|i| !pack.originals.contains_key(i)).count();
+        if key == LEVEL_LIB {
+            level_changed.extend(parts.iter().filter(|(i, p)| lib.by_index.get(*i) != Some(*p)).map(|(i, _)| *i));
+        }
+        let mut line = format!("{folder} {} replaced", pack.originals.len());
+        if 0 < restored {
+            line += &format!(", {restored} back to the original");
+        }
+        lines.push(line);
+        lib.by_label = labels_of(objects, &parts);
+        lib.by_index = parts;
+        lib.pack = pack;
+    }
+    if lines.is_empty() {
+        return;
+    }
+    // The level's changed nodes, spawned again in place.
+    if !level_changed.is_empty()
+        && let (Some(wv), Ok(root)) = (world_variants.as_mut(), root.single())
+        && let Some(lib) = libraries.0.get(LEVEL_LIB)
+    {
+        let index_of: HashMap<&str, u32> = session.level.objects.definitions.iter().map(|d| (d.label.as_str(), d.object_index as u32)).collect();
+        let mut again = std::collections::HashSet::new();
+        for (e, node, chain, vis, face) in &world {
+            let Some(n) = session.world.nodes.get(node.node) else { continue };
+            let Some(i) = index_of.get(n.label.as_str()) else { continue };
+            if !level_changed.contains(i) {
+                continue;
+            }
+            commands.entity(e).despawn();
+            if !again.insert(node.node) {
+                continue;
+            }
+            let Some(list) = lib.by_index.get(i) else { continue };
+            let place = WorldPlace {
+                node: node.node,
+                rest: node.rest,
+                chain: &chain.0,
+                flags: chain.0.first().map_or(0, |c| c.1),
+                zmod: if n.flags & 0x400 != 0 { -2 } else { 0 },
+                visibility: *vis,
+                face: face.map(|f| (f.mode, f.anchor)),
+            };
+            spawn_world_parts(&mut commands, root, &mut materials, wv, list, &place);
+        }
+        if let Some(mut g) = ground {
+            g.stale = true;
+        }
+    }
+    // Everything that picks its model by name picks it again.
+    for mut s in &mut slots {
+        s.key = None;
+    }
+    for mut h in &mut held {
+        h.key = None;
+    }
+    for mut f in &mut familiars {
+        f.key = None;
+    }
+    for mut t in &mut powerups {
+        t.key = None;
+    }
+    for mut h in &mut hands {
+        h.key = None;
+    }
+    for mut c in &mut critters {
+        c.shown = None;
+        c.posed = None;
+    }
+    let failed = gdl_client::model_pack::take_report().iter().filter(|l| l.contains("the original stays") || l.contains("not replaced")).count();
+    let mut line = format!("Models reloaded: {}", lines.join("; "));
+    if 0 < failed {
+        line += &format!("; {failed} files did not load");
+    }
+    eprintln!("F5: {line}");
+    let text = match notice.current() {
+        Some(t) => format!("{t}; {line}"),
+        None => line,
+    };
+    notice.0 = Some((text, std::time::Instant::now()));
 }
 
 /// GDL_DEBUG_HIDE=<label,...>: world nodes not spawned (render research).
@@ -9837,6 +10090,7 @@ fn setup_menu_icon(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<gdl_client::GsMaterial>>,
     mut blits: ResMut<Assets<gdl_client::BlitMaterial>>,
+    mut libraries: ResMut<Libraries>,
 ) {
     let pkg = &front.powerups_pkg;
     let Some((tree_index, tree)) = pkg.anim.as_ref().and_then(|a| a.trees.iter().enumerate().find(|(_, t)| t.label == "ICON_ARROW")) else { return };
@@ -9871,6 +10125,10 @@ fn setup_menu_icon(
     for node in &tree.nodes {
         tree_node_model(pkg, &lib, tree, node, Vec3::from_array(node.initial_position), &mut model);
     }
+    // NATIVE (this fork, decisions/0034): the game takes this library too
+    // (setup), unless the options that shape it change first.
+    libraries.0.insert("POWERUPS".to_string(), lib);
+    commands.insert_resource(FrontPowerups(build_key()));
     let target = images.add(Image::new_target_texture(640, 448, bevy::render::render_resource::TextureFormat::Rgba8Unorm, None));
     let layer = bevy::camera::visibility::RenderLayers::layer(ICON_LAYER);
     commands.spawn((
@@ -12720,6 +12978,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .insert_resource(Screen::Front)
         .insert_resource(presentation)
         .init_resource::<Libraries>()
+        .init_resource::<ModelReload>()
         .init_resource::<PartVariants>()
         .init_resource::<NodeVariants>()
         .init_resource::<MeshSpawnOrder>()
@@ -12786,7 +13045,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .add_systems(Update, hd_textures_job)
         .add_systems(Update, texture_browser_page)
         .init_resource::<ScreenNotice>()
-        .add_systems(Update, reload_textures)
+        .add_systems(Update, (reload_textures, reload_models).chain())
         .add_systems(First, net_frame_start)
         .add_systems(PreUpdate, (net_poll, net_local_tick).chain())
         .add_systems(PostUpdate, (interpolate_transforms.before(bevy::transform::TransformSystems::Propagate), mark_shadow_casters, present_shadow_light))
