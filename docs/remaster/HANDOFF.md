@@ -413,6 +413,8 @@ later. And effects look better mostly through their textures.
      too (--match spread) was pale and blotchy, not used. The owner's
      choice: "let's keep left for now" (the wood as delivered); the tool
      stays for later.
+   - The chest installed as delivered (decisions/0028, 2026-11-25, the
+     owner's "Install both"), shared like the barrels.
    - The gold heap: the owner's "we should probably make a new gold heap"
      (2026-11-25); brief docs/remaster/art-briefs/gold-heap.md, with the
      room under the fitted lid measured (y 0.38 in the middle, 0.18 at the
@@ -537,4 +539,7 @@ memory. The port stays the base.
 - [ ] Barrels in every realm (decisions/0026): built 2026-11-24, checked
       in G1 and A1; the owner's playtest next.
 - [ ] Items in shade (decisions/0027): built 2026-11-25, checked in G1,
-      A1 and D1; the owner's playtest next.
+      A1 and D1, installed 2026-11-25; the owner's playtest next.
+- [ ] The owner's treasure chest (decisions/0028): installed 2026-11-25;
+      the owner's playtest next (open one with a key; the gold chest in
+      the swamp).
