@@ -416,9 +416,21 @@ later. And effects look better mostly through their textures.
    - The chest installed as delivered (decisions/0028, 2026-11-25, the
      owner's "Install both"), shared like the barrels.
    - The gold heap: the owner's "we should probably make a new gold heap"
-     (2026-11-25); brief docs/remaster/art-briefs/gold-heap.md, with the
-     room under the fitted lid measured (y 0.38 in the middle, 0.18 at the
-     bevels).
+     (2026-11-25), then "Let's do all the gold/treasure heaps next": brief
+     docs/remaster/art-briefs/treasure-heaps.md for every treasure chest
+     (CHESTG0 junk, G1 silver, G2 coins, G3 gold, G4 gold and gems, G5
+     gems, CHESTSG gold in the iron-banded chest) and the iron-banded
+     chest's textures (CHESTS, CHESTSG), with the room under the fitted lid
+     measured (y 0.38 in the middle, 0.18 at the bevels). Found with the
+     project's ANIM parser (gdl_formats::animation, ITEMS_G): every
+     treasure tree's base and lid nodes are CHESTG2's (base y 1.427, z
+     -1.261; lid y 1.426, z -1.260), CHESTS's are CHEST's (lid z -1.342),
+     as the review pack's fit read them; every lid is CHESTLID's shape, the
+     treasure bases the plain base without its inside. The original gem
+     heaps (G4, G5) rise to 0.51, above the fitted lid's inside. HealItem
+     (one hero class's healing attack on a chest holding a little gold)
+     swaps a chest's tree to CHESTG1 (level 25) or CHESTG3 (level 50) in
+     any level, so those show the original chest until their files exist.
    - Items in shade (decisions/0027, 2026-11-25, the owner's "Yes, try
      it"): items take the baked light of the ground under them, darker in
      shade, torches and spells still lighting them; F10 → Graphics →

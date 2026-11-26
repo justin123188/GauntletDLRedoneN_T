@@ -53,7 +53,8 @@ put the wood in the barrel's colour (two looks tried, HANDOFF); the owner
 kept the wood as delivered for now.
 
 Not yet: the owner's playtest; a new gold heap (the brief
-docs/remaster/art-briefs/gold-heap.md); the other worlds' chests (the same
+docs/remaster/art-briefs/treasure-heaps.md, every treasure chest's heap
+and the iron-banded chest); the other worlds' chests (the same
 shape everywhere but the desert world C, as the barrels were done); the
 iron-banded chests (CHESTS) and the burst chest's remains (CHESTGEXP0,
 CHESTSEXP0).
