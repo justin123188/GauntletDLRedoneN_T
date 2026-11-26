@@ -57,9 +57,16 @@ y up, z from the hinge at the back, 0, to the lock at the front, 2.25):
 
 - **The rim** of the base is at y = -0.013; its inside floor at y = -1.30
   (the heap hides it).
-- **The opening** is about x -1.30 to +1.30 and z 0.18 to 2.07. Keep a heap
-  within x ±1.25 and z 0.22 to 2.03, and let its edge meet the inner walls
-  a little below the rim (y -0.03 to -0.08) so no gap shows.
+- **The opening:** the inner walls stand straight from the rim down at
+  x ±1.389 and z 0.116 to 2.117 (corrected 2026-11-25; this brief first
+  gave a rougher x ±1.30, z 0.18 to 2.07).
+- **The visible pieces** (coins, gems, anything standing up) stay within x
+  ±1.25 and z 0.22 to 2.03: near the walls the shut lid's side walls and
+  bevels come down to a few hundredths above the rim.
+- **To the walls**, a shallow layer of buried treasure just below the rim
+  (y -0.03 to -0.08) fills the band between those limits and the walls, so
+  no gap shows; nothing outside the visible pieces' limits rises above
+  y -0.01.
 - **Under the shut lid**, which must close over every heap without
   anything poking through: at most y 0.38 in the middle (z 0.5 to 1.75,
   |x| up to 1.2; the lid's inside is at 0.42 to 0.43 there), and at most y
