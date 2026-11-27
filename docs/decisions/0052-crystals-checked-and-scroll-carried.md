@@ -61,7 +61,26 @@ against 6e119bd2):
 - **The simulation hashes** over the 600-update G1 walk, with the
   crystals, equal the reference in the defaults and the baseline.
 
+## Installed
+
+2026-11-27 (the owner's "Yes, install"):
+- **The build of this change** (md5 4986cfa7). The previous one
+  (6e119bd2) is kept as gdl_play-texslide-backup.exe.
+- **The 16 crystal files** in model_pack\POWERUPS, byte-identical to the
+  review pack. No crystal file was there before, so to roll back, delete
+  them. No materials.tsv lines.
+- **The model pack:** 1,066 .glb, 1,400 files, 353 MB.
+
+Checked in the installed game (an isolated APPDATA):
+- **C1 and D1** are identical to the checked frames above, but for the
+  HUD's "LV 1" label (619 pixels, the owner's font; decisions/0047).
+- **G1:** the installed game has G1's new ground (decisions/0051), which
+  the checked frames above did not. Against the scratch copy's G1 frame
+  with that ground and the original crystals, 34,624 pixels differ (the
+  crystals and the label), as the crystals alone differ (34,835).
+- **G1's red crystal** draws as checked.
+- **All 16 files load** in each level, with no messages.
+
 Not yet:
-- the owner's look and choice to install (this build, and the 16 files
-  in model_pack\POWERUPS);
+- the owner's look in the game;
 - the gems brief's parts 2 and 3, the gargoyle pieces and the runestones.
