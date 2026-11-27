@@ -116,4 +116,5 @@ Not yet: the art, area by area; its check; the install; the owner's
 playtest.
 
 Later (2026-11-27): RIVER_BANK_03 is now typed as ground
-(decisions/0042).
+(decisions/0042). Area A came back the same day and passes the checks
+(decisions/0043).

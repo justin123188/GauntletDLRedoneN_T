@@ -743,4 +743,5 @@ memory. The port stays the base.
       (decisions/0040); the start area accepted by the owner 2026-11-27.
       The rest of G1's brief written 2026-11-27 (decisions/0041,
       art-briefs/g1-rest-ground.md): 45 pieces in four areas, A first.
-      Waiting for area A's art.
+      Area A checked 2026-11-27 (decisions/0043); the owner's look and
+      the install next, then area B.
