@@ -548,7 +548,13 @@ later. And effects look better mostly through their textures.
      it"): docs/remaster/art-briefs/g1-start-ground.md, in the art folder's
      G1_Ground with the eight pieces' exports, the level scene, the
      checker and pictures of the area. Waiting for the art; install the
-     light carry-over build with it. Light carried over from the baked
+     light carry-over build with it.
+   - The art came back the same day (decisions/0036): sound for the game
+     (every walked-on sample within 0.055 of the collision, no holes, the
+     light carried over, the same hashes and frame times, G1's load 1.1 to
+     1.5 s longer), but lighter and greyer than G1 and the sides plainer
+     from the game's camera. The owner's review next (a fix round, or a
+     playtest as it is). Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -701,5 +707,5 @@ memory. The port stays the base.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
-      written 2026-11-26 (art-briefs/g1-start-ground.md); waiting for the
-      art.
+      written 2026-11-26 (art-briefs/g1-start-ground.md); the art checked
+      2026-11-26 (decisions/0036); the owner's review next.

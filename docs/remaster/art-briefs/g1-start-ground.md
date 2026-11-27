@@ -126,3 +126,11 @@ For the game to read the files (gdl_client::model_pack): one buffer inside
 each .glb, triangle primitives with positions, normals and UVs, base
 colour textures as PNGs (opaque), no mesh compression (Draco, meshopt), no
 texture transforms, no animation.
+
+
+## Delivered
+
+2026-11-26: ChatGPT's eight pieces in the art folder's
+G1_Ground/review_pack/G1; checked in decisions/0036 (sound for the game:
+the collision, the light, the hashes and frame times; lighter and greyer
+than G1, the sides plainer from the game's camera).

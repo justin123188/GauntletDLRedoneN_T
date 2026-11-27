@@ -272,7 +272,8 @@ that one job.
       pieces, three walked on (G1#005, G1FLOOR#02, G1#004) and five free
       (G1#000, G1#001, G1#028, G1#029, G1#030); the swamp water (G1#063,
       G1#079) stays out. Vertices at most about 0.5 apart (the lightmap
-      has about one texel a unit).
+      has about one texel a unit). The art delivered and checked the same
+      day (decisions/0036).
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.
