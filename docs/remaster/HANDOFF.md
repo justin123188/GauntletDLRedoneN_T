@@ -729,8 +729,8 @@ memory. The port stays the base.
       (treasure in coloured light, the glints, characters' armour).
 - [ ] F5 for the model pack and the pickups built once (decisions/0033,
       0034): installed 2026-11-26; the owner's F5 from the keyboard next.
-- [ ] The junk chest's props (art-briefs/junk-chest-props.md): waiting
-      for the art.
+- [ ] The junk chest's props (art-briefs/junk-chest-props.md): checked
+      2026-11-27 (decisions/0047); not installed.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
@@ -743,8 +743,9 @@ memory. The port stays the base.
       (decisions/0040); the start area accepted by the owner 2026-11-27.
       The rest of G1's brief written 2026-11-27 (decisions/0041,
       art-briefs/g1-rest-ground.md): 45 pieces in four areas, A first.
-      Area A checked and installed 2026-11-27 (decisions/0043); area B
-      next. The order after it (decisions/0044, the owner's choice):
+      Area A checked and installed 2026-11-27 (decisions/0043). Area B
+      checked 2026-11-27 (decisions/0046): it passes, but the meadow has
+      lost the original's terraces; the owner's choice next. The order after it (decisions/0044, the owner's choice):
       areas B to D, the junk chest's props, the gems while the game gets
       plant support and a look at G1's load time, then G1's buildings
       and plants. Plants through the model pack checked and fixed
