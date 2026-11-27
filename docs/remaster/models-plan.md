@@ -292,7 +292,7 @@ that one job.
       G1's start area was accepted by the owner 2026-11-27
       (decisions/0040). The rest of G1: brief written 2026-11-27
       (art-briefs/g1-rest-ground.md, decisions/0041), four areas, A
-      first. Area A checked 2026-11-27 (decisions/0043).
+      first. Area A checked and installed 2026-11-27 (decisions/0043).
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.
 

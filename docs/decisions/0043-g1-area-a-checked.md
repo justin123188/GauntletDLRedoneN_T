@@ -77,5 +77,18 @@ Checked here (2026-11-27, the owner's PC):
   - The dirt is the start area's path. At a4 it is more evenly mossy and
     a little darker than the original's lighter, brown worn patches.
 
-Not yet: the owner's look, the install (area A into model_pack\G1), area
-B.
+Installed 2026-11-27 (the owner's "Yes, install"):
+- Area A's 17 pieces, field.png, riverbank.png and materials.tsv went
+  into the installed model_pack\G1. Its 34 files now have the same
+  hashes as the review pack.
+- The exe is unchanged (d7ae700a). model_pack now holds 1,009 .glb,
+  1,341 files, 291 MB.
+- The start area alone is kept beside the game as
+  model_pack-G1-startarea-backup\G1 (15 files). To go back, put that
+  folder in place of model_pack\G1.
+- Checked in the installed game, with an isolated APPDATA, at a1, a2
+  and the start: all 25 pieces load with the light carried over and no
+  warnings. The frames are the scratch copy's but for the HUD's "LV 1"
+  (619 pixels, the owner's font).
+
+Not yet: the owner's playtest, area B.
