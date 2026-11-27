@@ -758,7 +758,8 @@ memory. The port stays the base.
       with check_colour.py corrected to fixed sizes in game units. The
       fix came back and was checked 2026-11-27 (decisions/0051): the
       terraces are back, at the camera 15 % against the original's 14 %;
-      area B waits for the owner's look and choice to install. The order after it (decisions/0044, the owner's choice):
+      area B installed the same day (the previous G1 pack kept as
+      model_pack-G1-areaA-backup). Areas C and D next. The order after it (decisions/0044, the owner's choice):
       areas B to D, the junk chest's props, the gems while the game gets
       plant support and a look at G1's load time, then G1's buildings
       and plants. Plants through the model pack checked and fixed

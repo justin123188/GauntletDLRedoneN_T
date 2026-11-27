@@ -298,7 +298,8 @@ that one job.
       first. Area A checked and installed 2026-11-27 (decisions/0043).
       Area B checked 2026-11-27 (decisions/0046); the meadow's terraces
       asked for, and the colour checker corrected (decisions/0048); the
-      terraces back and checked the same day (decisions/0051).
+      terraces back, checked and installed the same day
+      (decisions/0051).
 7. **M7** Replacement plants and trees, and the optional scatter. First
    the game's side (decisions/0044): cut-out materials in the model pack,
    and the plant effects (decisions/0017) on replaced plants. Then G1's

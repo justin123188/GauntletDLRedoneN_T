@@ -51,5 +51,19 @@ Checked here (2026-11-27, the owner's PC):
     patches, where the original is a more even brown-olive. Its step
     lines are softer than the original's crisp ones.
 
-Not yet: the owner's look and choice to install area B (the start area,
-areas A and B in model_pack\G1).
+## Installed
+
+2026-11-27 (the owner's "Yes, install"): the review pack (the start area,
+areas A and B: 44 files) as model_pack\G1. The previous G1 pack (the
+start area and area A, 34 files) is kept as model_pack-G1-areaA-backup
+beside the game. The build is unchanged (6e119bd2).
+- **The files:** all 44 byte-identical to the review pack.
+- **The model pack:** 1,050 .glb, 1,384 files, 351 MB.
+- **In the installed game** (an isolated APPDATA):
+  - b1 to b4 are identical to the scratch copy's frames above, but for
+    the HUD's "LV 1" label (619 pixels, the owner's font; decisions/0047).
+  - G1's start is identical to the previous install's.
+  - All 33 pieces load with the light carried over, and there are no
+    messages.
+
+Not yet: the owner's look in the game (the grassland, b1 to b3).
