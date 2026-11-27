@@ -75,4 +75,8 @@ G1_Meadow_Terraces_Reference.png and the corrected check_colour.py):
 - **The new checker for areas C and D.** Pieces already accepted stay as
   they are.
 
+The owner (2026-11-27): "Yes, hold them to it". Areas C and D pass only
+by the corrected checker; the rest of G1's brief says so (art-briefs/
+g1-rest-ground.md, "The checkers", and its art folder copy).
+
 Not yet: the art, its check, area B's install.

@@ -218,6 +218,16 @@ As in the start area, run them on each area before hand-off:
     python check_colour.py private_export/objects/G1 review_pack/G1
     python check_ground.py private_export/levels/G1.glb <piece> review_pack/G1/<piece>.glb --map <piece>_map.png --report <piece>_check.json
 
+**From area C on** (2026-11-27), use the corrected check_colour.py in this
+folder. It measures the contrast at fixed sizes in game units: 0.5 units
+close up and 2 units at the camera. Each piece of areas C and D must pass
+by it:
+- the colour within 10 %;
+- at the camera, at least 80 % of its original's.
+
+The pieces already accepted (the start area, areas A and B) stay as they
+are, even where the new measure marks them.
+
 ## What to hand back, per area
 
 - **The area's files**, added to `review_pack/G1` (the start area's stay
