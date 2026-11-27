@@ -649,6 +649,12 @@ they do not.
   `materials.tsv` names glTF materials (`<name> <type> [bump= rough=
   metal=]`); a listed material's texture gets its detail map made for
   that type (material_maps::make_for). Unlisted materials draw as before.
+- **Texture slides** (decisions/0052, 2026-11-27): a replacement takes
+  its original's texture scrolls (DoTexScroll2Sub): GsMaterial::
+  scroll_from names the original's texture, and present_texmods sets the
+  replacement's shift with the original's. A crystal's sheen moves over
+  the new shell as over the old. Frame animations stay the original's
+  own. Without a model pack, frames are pixel-identical.
 
 ### Water effects (this fork, 2026-11-22)
 

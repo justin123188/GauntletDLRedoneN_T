@@ -738,7 +738,9 @@ memory. The port stays the base.
 - [ ] The gems (art-briefs/gems.md, decisions/0050): the crystals, the
       gargoyle pieces and the runestones, brief written 2026-11-27, in
       the art folder's Gems; handed back in three parts, crystals first.
-      Waiting for the art.
+      The crystals checked 2026-11-27 (decisions/0052), with the
+      original's texture slide carried to model pack replacements (the
+      sheen had stayed still); not installed. The gargoyle pieces next.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area

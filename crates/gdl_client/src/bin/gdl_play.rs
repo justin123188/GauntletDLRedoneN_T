@@ -6283,6 +6283,10 @@ struct TexMods {
     /// use and again whenever the material count changes (item, effect and
     /// variant materials are added later).
     by_image: Option<HashMap<AssetId<Image>, Vec<AssetId<gdl_client::GsMaterial>>>>,
+    /// NATIVE (model_pack): model pack materials by the original texture
+    /// they replace (GsMaterial::scroll_from), built with `by_image`; a
+    /// scroll of that texture slides theirs too.
+    by_source: HashMap<AssetId<Image>, Vec<AssetId<gdl_client::GsMaterial>>>,
     materials_seen: usize,
     /// gdl_client::texfilter::generation() at the last copy: a texture
     /// filter switch copies every current frame in again (NATIVE).
@@ -6371,7 +6375,7 @@ fn spawn_texmod_list(
         mods.push(TexModState { kind, count: tm.count, start: tm.start, divisor: tm.divisor, counter: tm.counter });
     }
     if !mods.is_empty() {
-        commands.spawn((TexMods { mods, aframe: 0, accumulated: 0.0, born: None, by_image: None, materials_seen: 0, filter_gen: gdl_client::texfilter::generation() }, LevelEntity));
+        commands.spawn((TexMods { mods, aframe: 0, accumulated: 0.0, born: None, by_image: None, by_source: HashMap::new(), materials_seen: 0, filter_gen: gdl_client::texfilter::generation() }, LevelEntity));
     }
 }
 
@@ -6386,12 +6390,17 @@ fn present_texmods(time: Res<Time>, sim: Res<Sim>, mut q: Query<&mut TexMods>, m
         let first = tm.by_image.is_none();
         if first || tm.materials_seen != materials.len() {
             let mut map: HashMap<AssetId<Image>, Vec<AssetId<gdl_client::GsMaterial>>> = HashMap::new();
+            let mut sources: HashMap<AssetId<Image>, Vec<AssetId<gdl_client::GsMaterial>>> = HashMap::new();
             for (id, m) in materials.iter() {
                 if let Some(b) = &m.base {
                     map.entry(b.id()).or_default().push(id);
                 }
+                if let Some(s) = m.scroll_from {
+                    sources.entry(s).or_default().push(id);
+                }
             }
             tm.by_image = Some(map);
+            tm.by_source = sources;
             tm.materials_seen = materials.len();
         }
         if first {
@@ -6472,7 +6481,7 @@ fn present_texmods(time: Res<Time>, sim: Res<Sim>, mut q: Query<&mut TexMods>, m
                     let sign = if m.count < 0 { -1.0 } else { 1.0 };
                     let _ = m.start;
                     let shift = sign * (m.counter.rem_euclid(n as i32) as f32 / n);
-                    for id in by_image.get(target).into_iter().flatten() {
+                    for id in by_image.get(target).into_iter().flatten().chain(tm.by_source.get(target).into_iter().flatten()) {
                         let cur = materials.get(*id).map(|mat| if *v { mat.params.options.w } else { mat.params.options.z });
                         if cur.is_some_and(|c| c != shift)
                             && let Some(mat) = materials.get_mut(*id)
@@ -6566,6 +6575,7 @@ fn present_streaks(
             overlay: None,
             lights: gdl_client::point_light_buffer(),
             detail: None,
+            scroll_from: None,
             alpha_mode: AlphaMode::Blend,
             draw: gdl_client::GsDraw {
                 additive: false,
@@ -6894,6 +6904,7 @@ fn present_particles(
                 overlay: None,
                 lights: gdl_client::point_light_buffer(),
                 detail: None,
+                scroll_from: None,
                 alpha_mode: if blend == gdl_core::psys::Blend::Additive { AlphaMode::Add } else { AlphaMode::Blend },
                 draw: gdl_client::GsDraw {
                     additive: blend == gdl_core::psys::Blend::Additive,

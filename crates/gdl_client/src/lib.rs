@@ -552,6 +552,11 @@ pub struct GsMaterial {
     #[texture(8)]
     #[sampler(9)]
     pub detail: Option<Handle<Image>>,
+    /// NATIVE (this fork, model_pack): the original texture a model pack
+    /// replacement stands in for, so the original's texture scrolls
+    /// (DoTexScroll2Sub, gdl_play present_texmods) slide the replacement's
+    /// texture too. None for the game's own materials.
+    pub scroll_from: Option<bevy::asset::AssetId<Image>>,
     pub alpha_mode: AlphaMode,
     pub draw: GsDraw,
 }
@@ -642,6 +647,7 @@ impl GsMaterial {
             overlay: None,
             lights: point_light_buffer(),
             detail: None,
+            scroll_from: None,
             alpha_mode,
             draw: GsDraw::default(),
         }
@@ -1032,6 +1038,7 @@ pub fn materials_for(
                     overlay: None,
                     lights: point_light_buffer(),
                     detail: None,
+                    scroll_from: None,
                     alpha_mode: AlphaMode::Blend,
                     draw: GsDraw { cull: true, ..default() },
                 }),
@@ -1080,6 +1087,7 @@ pub fn materials_for(
                 overlay: None,
                 lights: point_light_buffer(),
                 detail,
+                scroll_from: None,
                 alpha_mode,
                 draw: GsDraw { cull: true, ..default() },
             }),

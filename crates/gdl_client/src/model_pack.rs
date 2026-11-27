@@ -762,6 +762,9 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 })
                 .clone();
             let mut m = original.clone();
+            // The original's texture scrolls slide this texture too
+            // (GsMaterial::scroll_from): a crystal's sheen keeps moving.
+            m.scroll_from = original.scroll_from.or_else(|| original.base.as_ref().map(|b| b.id()));
             m.base = Some(image);
             // The original's lightmap pass, its light from the ramp.
             m.lightmap = lightmapped.then(|| ramp.get_or_insert_with(|| images.add(crate::light_transfer::ramp_image())).clone());
