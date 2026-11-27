@@ -289,6 +289,8 @@ that one job.
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.
+      G1's start area was accepted by the owner 2026-11-27
+      (decisions/0040).
 7. **M7** Replacement plants and trees, and the optional scatter.
 8. **M8** Characters: rigid or skinned, your choice then.
 

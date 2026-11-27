@@ -573,8 +573,8 @@ later. And effects look better mostly through their textures.
      the art folder's G1_Ground/G1_Banks_Gullies_Brief.md. The gullies
      came back the same day and pass the checks (decisions/0040).
      Installed 2026-11-27 over the fix round; the layered banks are kept
-     as model_pack-G1-layers-backup beside the game. The owner's playtest
-     next. Light carried over from the baked
+     as model_pack-G1-layers-backup beside the game. The owner accepted
+     the softer gullies the same day. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -733,4 +733,5 @@ memory. The port stays the base.
       2026-11-27; the fix round checked and installed 2026-11-27
       (decisions/0038); the banks' gullies brief 2026-11-27
       (decisions/0039); the gullies checked and installed 2026-11-27
-      (decisions/0040); the owner's playtest next.
+      (decisions/0040); the start area accepted by the owner 2026-11-27.
+      Next: the rest of G1, then each level's terrain in its overhaul.

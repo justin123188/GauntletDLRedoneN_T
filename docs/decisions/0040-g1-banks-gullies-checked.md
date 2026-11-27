@@ -95,4 +95,9 @@ Installed 2026-11-27 (the owner's "Yes, install"):
   - The frames are the scratch copy's but for the HUD's "LV 1" (619
     pixels, the owner's font).
 
-Not yet: the owner's playtest.
+The owner, after the install (2026-11-27): "yes the softer gullies are
+fine". G1's start area ground is accepted as installed: the fix round's
+path and walked-on pieces, and these banks.
+
+Next (models-plan M6 step 4): the rest of G1, then each level's terrain
+in its overhaul.
