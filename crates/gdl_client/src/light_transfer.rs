@@ -4,24 +4,57 @@
 //! 0x80 = 1.0) clamped at 0x80 by VU1 program B, times the lightmap's CLUT
 //! alpha / 0x80 in the lightmap pass (gs.wgsl). A model pack file has
 //! neither, so each of its vertices takes the light of the nearest point
-//! of the original object's surface, min(colour, 1) × lightmap there, as
-//! its vertex colour, and the part draws through program B without a
-//! lightmap. The disc's lightmaps are 4-bit (CLUT alpha index × 8, at most
-//! 120 / 128): they only darken, so the product is the same light.
+//! of the original object's surface: min(colour, 1) there as its vertex
+//! colour and, where the original is lightmapped, the lightmap there as a
+//! coordinate into a ramp (`ramp_image`: texel i holds i, so the sample is
+//! the lightmap's value, interpolated between vertices), and the part
+//! draws through program B and the original's lightmap pass
+//! (decisions/0037): its 16-bit frame write before the lightmap (4.5 / 255
+//! at full colour), the point lights under the lightmap, ambient occlusion.
 //! Presentation only.
 
 use crate::ground_light::{GroundTri, Lightmap};
 use crate::GsMaterial;
-use bevy::asset::{Assets, Handle};
-use bevy::image::Image;
+use bevy::asset::{Assets, Handle, RenderAssetUsages};
+use bevy::image::{Image, ImageSampler, ImageSamplerDescriptor};
 use bevy::math::{Vec2, Vec3};
 use bevy::mesh::{Indices, Mesh, VertexAttributeValues};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use std::collections::HashMap;
 
 /// The search grid's cell (game units) and how many rings of cells are
 /// searched before every triangle is tried.
 const CELL: f32 = 2.0;
 const MAX_RING: i32 = 6;
+
+/// The lightmap ramp's width: texel i holds i (i / 0x80 as a lightmap).
+pub const RAMP_WIDTH: u32 = 256;
+
+/// The lightmap ramp's texels.
+pub fn ramp_texels() -> Vec<u8> {
+    (0..RAMP_WIDTH).map(|i| i as u8).collect()
+}
+
+/// The lightmap ramp, as the disc's lightmaps are made (R8, linear): a
+/// vertex's lightmap value as a coordinate (`ramp_uv`) samples back as
+/// that value, interpolated linearly between vertices (and by the smooth
+/// lightmaps' B-spline, which keeps a straight ramp).
+pub fn ramp_image() -> Image {
+    let mut image = Image::new(
+        Extent3d { width: RAMP_WIDTH, height: 1, depth_or_array_layers: 1 },
+        TextureDimension::D2,
+        ramp_texels(),
+        TextureFormat::R8Unorm,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
+    image
+}
+
+/// The ramp coordinate of a lightmap value (0x80 = 1.0).
+pub fn ramp_uv(lightmap: f32) -> [f32; 2] {
+    [(lightmap.clamp(0.0, 1.0) * 128.0 + 0.5) / RAMP_WIDTH as f32, 0.5]
+}
 
 /// An original object's surface with its baked light.
 pub struct Source {
@@ -135,13 +168,21 @@ impl Source {
     }
 
     /// The baked light at the surface point nearest to `p`: the vertex
-    /// colour there clamped at 1 (0x80), times the lightmap there.
-    pub fn light_at(&self, p: Vec3) -> Vec3 {
+    /// colour there clamped at 1 (0x80) and, where that triangle is
+    /// lightmapped, the lightmap there.
+    pub fn baked_at(&self, p: Vec3) -> (Vec3, Option<f32>) {
         let (k, w) = self.nearest(p);
         let t = &self.tris[k];
         let colour = (t.colours[0] * w.x + t.colours[1] * w.y + t.colours[2] * w.z).min(Vec3::ONE);
-        let lm = t.lightmap.as_ref().and_then(|(uv, i)| self.lightmaps.get(*i).map(|l| l.sample(uv[0] * w.x + uv[1] * w.y + uv[2] * w.z))).unwrap_or(1.0);
-        colour * lm
+        let lm = t.lightmap.as_ref().and_then(|(uv, i)| self.lightmaps.get(*i).map(|l| l.sample(uv[0] * w.x + uv[1] * w.y + uv[2] * w.z)));
+        (colour, lm)
+    }
+
+    /// The baked light at the surface point nearest to `p` as one colour:
+    /// the vertex colour there clamped at 1, times the lightmap there.
+    pub fn light_at(&self, p: Vec3) -> Vec3 {
+        let (colour, lm) = self.baked_at(p);
+        colour * lm.unwrap_or(1.0)
     }
 }
 
@@ -237,5 +278,23 @@ mod tests {
         assert!((s.light_at(Vec3::new(101.0, 0.5, 1.0)) - Vec3::splat(0.5)).length() < 1e-5);
         // Degenerate triangles only: nothing to take light from.
         assert!(Source::new(vec![GroundTri { corners: [Vec3::ZERO; 3], colours: [Vec3::ONE; 3], lightmap: None }], Vec::new()).is_none());
+        // Apart: the colour, and the lightmap where there is one.
+        assert_eq!(s.baked_at(Vec3::new(0.0, 0.3, 0.0)).1, None);
+        let (c, lm) = s.baked_at(Vec3::new(101.0, 0.5, 1.0));
+        assert!((c - Vec3::ONE).length() < 1e-5 && (lm.unwrap() - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn the_ramp_samples_back_as_the_lightmap() {
+        let ramp = Lightmap { width: RAMP_WIDTH, height: 1, texels: Arc::new(ramp_texels()) };
+        for k in 0..=128 {
+            let v = k as f32 / 128.0;
+            let [u, w] = ramp_uv(v);
+            assert!((ramp.sample(Vec2::new(u, w)) - v).abs() < 1e-5, "{v}");
+        }
+        // Between two vertices: linear, as the vertex colours are.
+        let (a, b) = (ramp_uv(0.25), ramp_uv(0.75));
+        assert!((ramp.sample(Vec2::new((a[0] + b[0]) / 2.0, 0.5)) - 0.5).abs() < 1e-5);
+        assert_eq!(ramp_image().texture_descriptor.format, TextureFormat::R8Unorm);
     }
 }

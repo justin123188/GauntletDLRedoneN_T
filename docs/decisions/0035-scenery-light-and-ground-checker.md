@@ -80,3 +80,9 @@ this change, md5 9d157a00):
   defaults and the baseline.
 - **Not yet.** The art (the brief: art-briefs/g1-start-ground.md), the
   install with it, the owner's playtest.
+
+Later (decisions/0037): the "mean 1.4 to 1.6 brighter" above is over the
+whole frame; per ground pixel it was 4 to 8 / 255 (the base pass's 16-bit
+frame write, which the single pass left out). The carried light now draws
+through the original's lightmap pass (a ramp lightmap): 0.98 to 1.00 of
+the original.

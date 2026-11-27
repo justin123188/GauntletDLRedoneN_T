@@ -134,3 +134,37 @@ texture transforms, no animation.
 G1_Ground/review_pack/G1; checked in decisions/0036 (sound for the game:
 the collision, the light, the hashes and frame times; lighter and greyer
 than G1, the sides plainer from the game's camera).
+
+## Fix round
+
+2026-11-27 (the owner's "Yes, write the fix"): the art folder's
+G1_Ground/G1_Start_Ground_Fix_Brief.md, with check_colour.py (the
+repository's tools/blender/check_colour.py) and
+G1_Start_Ground_Fix_Views.png (the original and the delivered ground in
+four views, the build of decisions/0037). Its three requests:
+- **The colour:** each piece's texture mean, as laid on the surface,
+  within 10 % of its original's per channel. The targets: the path
+  (GROUND_01) about 50, 47, 23, olive with green as high as red; the banks
+  (GROUNDSIDE_01) about 54, 40, 21, a red-brown earth; the slope
+  (SLOPE_01) about 53, 42, 19. Delivered: 1.30 to 1.46 in red and green,
+  1.61 to 1.90 in blue. The PNGs change; the base colour factor stays 1.
+- **The contrast** (the luma's standard deviation over its mean, at the
+  1/32 mip: at the camera) at least 80 % of the original's. The banks:
+  24 to 26 % in the original, 16 % delivered. Asked for: large patches of
+  light and dark, 0.5 to 1.5 units across; the relief's own shading
+  painted in (dark recesses, light tops; not the level's light); a dark
+  recess material allowed.
+- **Bolder bank relief** (delivered: a median of 0.06 to 0.16 off the
+  original's surface, at most about 0.7):
+  - ledges and strata 0.4 to 1.0 deep with undercuts (the game's ambient
+    occlusion now darkens them);
+  - outcrops 1.5 to 3 units across, standing 0.5 to 1.0 out, along the
+    top edge and the waterline;
+  - roots 0.25 to 0.4 across;
+  - fewer, bigger features.
+
+The game does not read vertex colours. The rules stay the same: the
+walked-on pieces keep their shape, nothing over the path, the seams
+closed, below the waterline, vertices at most 0.5 apart. Hand back: the
+eight files, both checkers' output, and renders of the banks from about
+the game's camera beside the original.

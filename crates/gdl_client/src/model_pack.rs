@@ -28,7 +28,8 @@
 //! lights items (the level's sun and ambient, present_scene_light). A
 //! replacement of scenery drawn with baked light takes the original's
 //! (decisions/0035, models-plan option A: light_transfer), so new ground
-//! keeps the level's light.
+//! keeps the level's light, drawn through the original's lightmap pass
+//! (decisions/0037).
 //!
 //! Material detail (decisions/0029): a package folder's `materials.tsv`
 //! (the texture pack's table form: `<name> <type> [bump=… rough=…
@@ -651,15 +652,17 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     // before the work went to threads).
     let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
     let mut details: HashMap<(u64, u16, DetailKey), Handle<Image>> = HashMap::new();
+    let mut ramp: Option<Handle<Image>> = None;
     let files = loaded.len();
     for (index, label, path, original, new) in loaded {
         let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let mut list = Vec::new();
         let mut triangles = 0;
-        // NATIVE (decisions/0035): scenery drawn with baked light takes the
-        // original's (light_transfer: each vertex the light of the nearest
-        // point of the original's surface, drawn as the scenery draws);
-        // items and characters keep the live light.
+        // NATIVE (decisions/0035, 0037): scenery drawn with baked light
+        // takes the original's (light_transfer: each vertex the light of
+        // the nearest point of the original's surface, drawn as the scenery
+        // draws: the vertex colour, and the lightmap through the ramp where
+        // the original has one); items and characters keep the live light.
         let baked = !original.lit && original.params.light_dir.w.abs() < 0.5 && !original.draw.additive;
         let source = if baked { parts.get(&index).and_then(|l| crate::light_transfer::source_of(l, meshes, materials, images)) } else { None };
         for p in new {
@@ -667,18 +670,26 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             let n = p.positions.len();
             let flags = address_flags(&p);
             let line = detail_line(&table, &p);
-            let colours: Vec<[f32; 4]> = match &source {
-                Some(s) => p.positions.iter().map(|v| s.light_at(Vec3::from_array(*v)).extend(1.0).to_array()).collect(),
-                None => vec![[1.0f32; 4]; n],
+            let (colours, lightmap_uvs): (Vec<[f32; 4]>, Option<Vec<[f32; 2]>>) = match &source {
+                Some(s) => {
+                    let at: Vec<(Vec3, Option<f32>)> = p.positions.iter().map(|v| s.baked_at(Vec3::from_array(*v))).collect();
+                    let uvs = at.iter().any(|(_, lm)| lm.is_some()).then(|| at.iter().map(|(_, lm)| crate::light_transfer::ramp_uv(lm.unwrap_or(1.0))).collect());
+                    (at.iter().map(|(c, _)| c.extend(1.0).to_array()).collect(), uvs)
+                }
+                None => (vec![[1.0f32; 4]; n], None),
             };
-            let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+            let lightmapped = lightmap_uvs.is_some();
+            let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p.positions)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, p.normals)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, p.uvs)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
                 .with_inserted_indices(Indices::U32(p.indices));
+            if let Some(uvs) = lightmap_uvs {
+                mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uvs);
+            }
             let detail_key = line.as_ref().map(detail_key);
-            let shared = (p.texture_key, flags, p.class, p.double_sided, detail_key);
+            let shared = (p.texture_key, flags, p.class, p.double_sided, detail_key, lightmapped);
             if let Some(m) = made.get(&shared) {
                 list.push((meshes.add(mesh), m.clone()));
                 continue;
@@ -696,13 +707,14 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 .clone();
             let mut m = original.clone();
             m.base = Some(image);
-            m.lightmap = None;
+            // The original's lightmap pass, its light from the ramp.
+            m.lightmap = lightmapped.then(|| ramp.get_or_insert_with(|| images.add(crate::light_transfer::ramp_image())).clone());
             m.overlay = None;
             m.detail = None;
             // Lit live as items are, unless it carries the original's light.
             m.lit = source.is_none();
             m.params.options.x = 1.0;
-            m.params.options.y = 0.0;
+            m.params.options.y = if lightmapped { 1.0 } else { 0.0 };
             m.params.scale.z = 0.0;
             m.params.scale.w = 0.0;
             m.params.depth.y = 0.0;
@@ -804,8 +816,9 @@ fn run_parallel<J: Sync, R: Send>(jobs: &[J], f: impl Fn(&J) -> R + Sync) -> Vec
 type DetailKey = (material_maps::Kind, Option<u32>, Option<u32>, Option<u32>);
 
 /// An object's parts drawn with one material: the texture, its address
-/// modes, the alpha class, double-sidedness and the detail line.
-type MadeKey = (u64, u16, u8, bool, Option<DetailKey>);
+/// modes, the alpha class, double-sidedness, the detail line and whether
+/// the carried light has a lightmap (the ramp).
+type MadeKey = (u64, u16, u8, bool, Option<DetailKey>, bool);
 
 fn detail_key(l: &material_maps::Line) -> DetailKey {
     (l.kind, l.bump.map(f32::to_bits), l.rough.map(f32::to_bits), l.metal.map(f32::to_bits))

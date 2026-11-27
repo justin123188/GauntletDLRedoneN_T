@@ -553,8 +553,16 @@ later. And effects look better mostly through their textures.
      (every walked-on sample within 0.055 of the collision, no holes, the
      light carried over, the same hashes and frame times, G1's load 1.1 to
      1.5 s longer), but lighter and greyer than G1 and the sides plainer
-     from the game's camera. The owner's review next (a fix round, or a
-     playtest as it is). Light carried over from the baked
+     from the game's camera. The owner chose a fix round (2026-11-27,
+     decisions/0037): the carried light was about 5 / 255 too bright on
+     dark ground (0035 had measured over the whole frame) and now draws
+     through the original's lightmap pass (a ramp lightmap; ambient
+     occlusion reaches new ground); tools/blender/check_colour.py compares
+     the textures' colour and contrast with the original's; the fix brief
+     (art-briefs/g1-start-ground.md "Fix round", the art folder's
+     G1_Ground/G1_Start_Ground_Fix_Brief.md) asks for G1's colours, the
+     banks' light and dark, and bolder relief. Not installed; waiting for
+     the art (install the build of 0037 with it). Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -708,4 +716,6 @@ memory. The port stays the base.
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
       written 2026-11-26 (art-briefs/g1-start-ground.md); the art checked
-      2026-11-26 (decisions/0036); the owner's review next.
+      2026-11-26 (decisions/0036); the carried light fixed and the colour
+      checker 2026-11-27 (decisions/0037); the fix brief written
+      2026-11-27; waiting for the art.

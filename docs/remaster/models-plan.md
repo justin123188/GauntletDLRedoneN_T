@@ -253,7 +253,11 @@ that one job.
       original's surface, and the part draws as the scenery does (VU1
       program B, no lightmap). The test: a ground object replaced by its
       own export draws as the original. Built 2026-11-26 (decisions/0035):
-      within about 1.5 / 255 of the original with material detail off.
+      within about 1.5 / 255 of the original with material detail off
+      (over the whole frame; per ground pixel 4 to 8). Since 2026-11-27
+      (decisions/0037) the carried light draws through the original's
+      lightmap pass (a ramp lightmap): 0.98 to 1.00 of the original, with
+      ambient occlusion.
    2. **The checker** (tools/blender, also usable by the art tool): the
       new ground's surface against the level's collision layer over the
       walkable collision triangles: where it is above (feet sink) or below
@@ -273,7 +277,9 @@ that one job.
       (G1#000, G1#001, G1#028, G1#029, G1#030); the swamp water (G1#063,
       G1#079) stays out. Vertices at most about 0.5 apart (the lightmap
       has about one texel a unit). The art delivered and checked the same
-      day (decisions/0036).
+      day (decisions/0036). A fix round 2026-11-27 (decisions/0037,
+      the brief's "Fix round"): the colour and contrast against the
+      originals' (tools/blender/check_colour.py), bolder bank relief.
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.

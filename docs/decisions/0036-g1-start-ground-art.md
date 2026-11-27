@@ -55,3 +55,9 @@ Checked here (2026-11-26):
 
 Not yet: the owner's review (a fix round, or a playtest as it is), the
 install (with the build of decisions/0035).
+
+Later (2026-11-27, the owner's "Yes, write the fix"): part of the
+difference was the game's (the carried light about 5 / 255 too bright on
+dark ground, fixed in decisions/0037); the rest is the textures (the
+colour checker, tools/blender/check_colour.py). The fix brief:
+art-briefs/g1-start-ground.md, "Fix round".
