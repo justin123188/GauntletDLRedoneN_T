@@ -81,5 +81,18 @@ Checked here (2026-11-27, the owner's PC):
   - The original's cracks are crisper and darker. The new gullies read
     as softer folds.
 
-Not yet: the owner's look, the install (this pack over the fix round,
-with the gully material), the owner's playtest.
+Installed 2026-11-27 (the owner's "Yes, install"):
+- The seven changed files went into the installed model_pack\G1: the
+  four banks, bank.png, gully.png and materials.tsv. Its 15 files now
+  have the same hashes as the review pack.
+- The exe is unchanged (65051ea4).
+- The layered fix round is kept beside the game, outside the model pack,
+  as model_pack-G1-layers-backup\G1 (14 files). To go back, put that
+  folder in place of model_pack\G1.
+- Checked in the installed game, with an isolated APPDATA:
+  - The start and the west side load all eight pieces with the light
+    carried over, and there are no warnings.
+  - The frames are the scratch copy's but for the HUD's "LV 1" (619
+    pixels, the owner's font).
+
+Not yet: the owner's playtest.
