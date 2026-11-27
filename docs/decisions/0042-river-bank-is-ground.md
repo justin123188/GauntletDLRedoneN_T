@@ -56,4 +56,14 @@ the installed build of decisions/0037, 65051ea4):
   (the bank before and after, with the defaults and with material detail
   off).
 
-Not yet: the install.
+Installed 2026-11-27 (the owner's "Yes, install"):
+- The exe is the build of b61f9bf (md5 d7ae700a). The previous exe
+  (ee48b64, 65051ea4) is kept as gdl_play-groundlight-backup.exe. The
+  model pack is unchanged.
+- Checked in the installed game, with an isolated APPDATA:
+  - The start and the west side are identical to the same views from
+    the previous install, with the eight G1 pieces carried and no
+    warnings.
+  - At the river bank, RIVER_BANK_03 is listed as "ground guess". The
+    frame is the scratch copy's but for the HUD's "LV 1" (619 pixels,
+    the owner's font).

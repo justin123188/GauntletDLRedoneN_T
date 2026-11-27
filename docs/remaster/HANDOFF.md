@@ -580,7 +580,8 @@ later. And effects look better mostly through their textures.
      unchanged and G1 about 3 s longer to load. The survey found G1's
      river banks typed as water by their name (RIVER_BANK_03), which
      gave them the water effect's glinting streak; a BANK rule now types
-     them as ground (decisions/0042, not installed). Light carried over from the baked
+     them as ground (decisions/0042, installed 2026-11-27; the previous
+     exe kept as gdl_play-groundlight-backup.exe). Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
