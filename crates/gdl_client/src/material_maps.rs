@@ -169,7 +169,10 @@ const WORDS: &[(Kind, &[&str])] = &[
         Kind::Foliage,
         &[
             "LEAF", "LEAVES", "^TREE", "^BUSH", "PLANT", "^FERN", "^VINE", "IVY", "WEED", "FLOWER", "HEDGE", "SHRUB", "BRANCH", "FOLIAGE", "^PALM",
-            "^REED", "CACTUS", "=PINE", "PINETREE", "PINECONE", "OAK", "FROND", "GROWTH", "CORN", "STALK", "WILLOW", "CYPRESS",
+            // CORN as a word of its own (decisions/0045): not CORNER,
+            // CORNICE or CORNR, which are stone, tiles and roofs.
+            "^REED", "CACTUS", "=PINE", "PINETREE", "PINECONE", "OAK", "FROND", "GROWTH", "=CORN", "CORNFIELD", "ACORN", "STALK", "WILLOW",
+            "CYPRESS",
         ],
     ),
     (
@@ -725,6 +728,19 @@ mod tests {
             ("SANDBANK", Kind::Ground),
             ("RIVERNEW", Kind::Water),
             ("RAPIDS00", Kind::Water),
+            // CORN only as a word of its own (2026-11-27): the corners are
+            // what their other words say.
+            ("CORN_BASE_05", Kind::Foliage),
+            ("CORNFIELD", Kind::Foliage),
+            ("SCRT_PH_ACORN", Kind::Foliage),
+            ("BRICKCORNER", Kind::Stone),
+            ("ROCK_CORNER", Kind::Stone),
+            ("CORNER_ROOF_RUIN", Kind::Stone),
+            ("CASTLE_WALL_CORNICE2", Kind::Stone),
+            ("BLACKCORNERTILE", Kind::Stone),
+            ("CORNERFLESH", Kind::Skin),
+            ("PATHWAY_RIGHTTOPCORNER", Kind::Ground),
+            ("H_GOTH_CORNR", Kind::Auto),
             // G1's plants (2026-11-22).
             ("CORN_SIDE", Kind::Foliage),
             ("MOSS_BRANCH", Kind::Foliage),

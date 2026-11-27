@@ -296,7 +296,11 @@ that one job.
 7. **M7** Replacement plants and trees, and the optional scatter. First
    the game's side (decisions/0044): cut-out materials in the model pack,
    and the plant effects (decisions/0017) on replaced plants. Then G1's
-   plants, with its buildings, to finish G1.
+   plants, with its buildings, to finish G1. The model pack already read
+   cut-out, see-through and double-sided materials. Its types now mark
+   plants with any of the three effects on, and CORN matches only as a
+   word (decisions/0045). Plants keep their leaves as typed cards: the
+   sway moves the texture. A sway of the shape is for later.
 8. **M8** Characters: rigid or skinned, your choice then.
 
 **Each step gets:**

@@ -747,4 +747,7 @@ memory. The port stays the base.
       next. The order after it (decisions/0044, the owner's choice):
       areas B to D, the junk chest's props, the gems while the game gets
       plant support and a look at G1's load time, then G1's buildings
-      and plants.
+      and plants. Plants through the model pack checked and fixed
+      2026-11-27 (decisions/0045: marked with material detail off; CORN
+      as a word, so corners no longer sway); the load measured; not
+      installed.

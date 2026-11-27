@@ -196,6 +196,8 @@ type Shared = (u64, Arc<Vec<u8>>);
 pub struct Textures {
     decoded: HashMap<u64, Texture>,
     files: HashMap<PathBuf, Shared>,
+    /// DIAGNOSTIC: the time spent decoding PNGs.
+    decode_time: std::time::Duration,
 }
 
 fn content_hash(bytes: &[u8]) -> u64 {
@@ -272,6 +274,7 @@ pub fn read_glb_with(bytes: &[u8], textures: &mut Textures, beside: Option<&Path
         textures: RefCell::new(std::mem::take(&mut textures.decoded)),
         files: RefCell::new(std::mem::take(&mut textures.files)),
         images: RefCell::new(HashMap::new()),
+        decode_time: std::cell::Cell::new(std::time::Duration::ZERO),
     };
     let scene = doc["scene"].as_u64().unwrap_or(0) as usize;
     let roots: Vec<usize> = match doc["scenes"].get(scene) {
@@ -281,6 +284,7 @@ pub fn read_glb_with(bytes: &[u8], textures: &mut Textures, beside: Option<&Path
     let mut out = Vec::new();
     let mut vertices = 0;
     let walked = roots.into_iter().try_for_each(|root| g.node(root, Mat4::IDENTITY, 0, &mut out, &mut vertices));
+    textures.decode_time += g.decode_time.get();
     textures.decoded = g.textures.into_inner();
     textures.files = g.files.into_inner();
     walked?;
@@ -302,6 +306,8 @@ struct Gltf<'a> {
     files: RefCell<HashMap<PathBuf, Shared>>,
     /// This file's images by index: their bytes and hash, found once.
     images: RefCell<HashMap<usize, Shared>>,
+    /// DIAGNOSTIC: the time spent decoding this file's PNGs.
+    decode_time: std::cell::Cell<std::time::Duration>,
 }
 
 impl Gltf<'_> {
@@ -423,10 +429,12 @@ impl Gltf<'_> {
         if let Some(t) = self.textures.borrow().get(&key) {
             return Ok((t.clone(), key, class, double_sided, clamp));
         }
+        let decoding = std::time::Instant::now();
         let (w, h, mut rgba) = match &png {
             Some((_, bytes)) => decode_png(bytes)?,
             None => (1, 1, vec![255; 4]),
         };
+        self.decode_time.set(self.decode_time.get() + decoding.elapsed());
         for p in rgba.chunks_exact_mut(4) {
             for (c, f) in p.iter_mut().zip(factor) {
                 *c = (f32::from(*c) * f.clamp(0.0, 1.0)).round() as u8;
@@ -590,7 +598,11 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     // NATIVE (decisions/0029): the materials materials.tsv names get
     // detail maps, made once per texture and type (only while material
     // detail is on, as for the game's own textures: the next level's).
-    let table = if material_maps::enabled() { read_table(&folder, package) } else { HashMap::new() };
+    // Their types mark water and plants for those effects while either is
+    // on, with or without material detail, as the game's own textures'
+    // types do (decisions/0045).
+    let table = if material_maps::typing() { read_table(&folder, package) } else { HashMap::new() };
+    let detail = material_maps::enabled();
     // DIAGNOSTIC (performance, with gdl_play's GDL_FRAME_LOG): the
     // package's time reading and decoding, making the textures' mipmaps
     // and detail maps, building the parts, and in all.
@@ -623,7 +635,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 jobs.push(Job::Mips(p.texture.clone()));
                 jobs.len() - 1
             });
-            if let Some(line) = detail_line(&table, p) {
+            if let Some(line) = detail_line(&table, p).filter(|_| detail) {
                 job_of_detail.entry((p.texture_key, flags, detail_key(&line))).or_insert_with(|| {
                     jobs.push(Job::Detail(p.texture.clone(), flags, line, p.material.clone().unwrap_or_default()));
                     jobs.len() - 1
@@ -635,19 +647,23 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     let read = started.elapsed();
     // 2. The textures' work (pure: the sharp filter's mipmap chains and
     // the detail maps) on the machine's threads.
-    let mut done: Vec<Option<Done>> = run_parallel(&jobs, |job| match job {
-        Job::Mips(t) => Done::Mips(texfilter::with_chain(t.0, t.1, vec![t.2.clone()], sharp)),
-        Job::Detail(t, flags, line, name) => {
-            // The texture's own texels set the bump's scale (no disc
-            // record behind it).
-            let src = material_maps::Source { name, label: "", width: t.0, height: t.1, rgba: &t.2, record_width: t.0, flags: *flags };
-            Done::Detail(Box::new(material_maps::make_for(&src, line.clone())))
-        }
-    })
-    .into_iter()
-    .map(Some)
-    .collect();
+    let timed: Vec<(Done, std::time::Duration)> = run_parallel(&jobs, |job| {
+        let at = std::time::Instant::now();
+        let d = match job {
+            Job::Mips(t) => Done::Mips(texfilter::with_chain(t.0, t.1, vec![t.2.clone()], sharp)),
+            Job::Detail(t, flags, line, name) => {
+                // The texture's own texels set the bump's scale (no disc
+                // record behind it).
+                let src = material_maps::Source { name, label: "", width: t.0, height: t.1, rgba: &t.2, record_width: t.0, flags: *flags };
+                Done::Detail(Box::new(material_maps::make_for(&src, line.clone())))
+            }
+        };
+        (d, at.elapsed())
+    });
+    let longest_job = timed.iter().map(|(_, t)| *t).max().unwrap_or_default();
+    let mut done: Vec<Option<Done>> = timed.into_iter().map(|(d, _)| Some(d)).collect();
     let work = started.elapsed() - read;
+    let mut carry_time = std::time::Duration::ZERO;
     // 3. The parts, in order, each image added where it is first used (as
     // before the work went to threads).
     let mut uploaded: HashMap<(u64, u16), Handle<Image>> = HashMap::new();
@@ -670,6 +686,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             let n = p.positions.len();
             let flags = address_flags(&p);
             let line = detail_line(&table, &p);
+            let carrying = std::time::Instant::now();
             let (colours, lightmap_uvs): (Vec<[f32; 4]>, Option<Vec<[f32; 2]>>) = match &source {
                 Some(s) => {
                     let at: Vec<(Vec3, Option<f32>)> = p.positions.iter().map(|v| s.baked_at(Vec3::from_array(*v))).collect();
@@ -678,6 +695,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
                 }
                 None => (vec![[1.0f32; 4]; n], None),
             };
+            carry_time += carrying.elapsed();
             let lightmapped = lightmap_uvs.is_some();
             let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p.positions)
@@ -726,15 +744,18 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
             };
             m.draw.cull = !p.double_sided;
             if let (Some(line), Some(k)) = (line, detail_key) {
-                let detail = details
-                    .entry((p.texture_key, flags, k))
-                    .or_insert_with(|| {
-                        let Some(Done::Detail(d)) = done[job_of_detail[&(p.texture_key, flags, k)]].take() else { unreachable!("each detail map is made once") };
-                        images.add(material_maps::image(&d, flags))
-                    })
-                    .clone();
-                m.detail = Some(detail);
-                m.params.depth.y = 1.0;
+                if detail {
+                    let detail = details
+                        .entry((p.texture_key, flags, k))
+                        .or_insert_with(|| {
+                            let Some(Done::Detail(d)) = done[job_of_detail[&(p.texture_key, flags, k)]].take() else { unreachable!("each detail map is made once") };
+                            images.add(material_maps::image(&d, flags))
+                        })
+                        .clone();
+                    m.detail = Some(detail);
+                    m.params.depth.y = 1.0;
+                }
+                // Water and plants, while their effects are on.
                 m.params.depth.z = material_maps::special(line.kind, Some(p.class));
             }
             let m = materials.add(m);
@@ -748,11 +769,14 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     if std::env::var_os("GDL_FRAME_LOG").is_some() {
         let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
         eprintln!(
-            "PERF model_pack {package} {files} files: read and decode {:.0} ms, mipmaps and detail maps {:.0} ms ({} jobs), parts {:.0} ms, all {:.0} ms",
+            "PERF model_pack {package} {files} files: read and decode {:.0} ms (PNG decoding {:.0}), mipmaps and detail maps {:.0} ms ({} jobs, the longest {:.0}), parts {:.0} ms (light carried {:.0}), all {:.0} ms",
             ms(read),
+            ms(textures.decode_time),
             ms(work),
             jobs.len(),
+            ms(longest_job),
             ms(started.elapsed() - read - work),
+            ms(carry_time),
             ms(started.elapsed())
         );
     }
