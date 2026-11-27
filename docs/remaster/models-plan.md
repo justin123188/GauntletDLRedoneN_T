@@ -267,7 +267,12 @@ that one job.
       tolerance of the collision, detail (ruts, roots, stones, banks)
       where heroes do not walk or within the tolerance; the swamp's
       animated overlay kept or redone (a replacement drops the original's
-      texture scrolling).
+      texture scrolling). Written 2026-11-26
+      (art-briefs/g1-start-ground.md, the art folder's G1_Ground): eight
+      pieces, three walked on (G1#005, G1FLOOR#02, G1#004) and five free
+      (G1#000, G1#001, G1#028, G1#029, G1#030); the swamp water (G1#063,
+      G1#079) stays out. Vertices at most about 0.5 apart (the lightmap
+      has about one texel a unit).
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.

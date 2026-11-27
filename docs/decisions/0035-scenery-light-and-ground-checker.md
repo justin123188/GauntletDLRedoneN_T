@@ -78,4 +78,5 @@ this change, md5 9d157a00):
   G1 with Items in shade off and with the defaults: identical. Simulation
   hashes over 600 updates of the G1 walk equal the reference, in the
   defaults and the baseline.
-- **Not yet.** The art brief for the start area (models-plan M6 step 3).
+- **Not yet.** The art (the brief: art-briefs/g1-start-ground.md), the
+  install with it, the owner's playtest.

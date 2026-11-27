@@ -543,7 +543,12 @@ later. And effects look better mostly through their textures.
      "Yes, start them"): replaced scenery takes the original's baked light
      (gdl_client::light_transfer), and tools/blender/check_ground.py checks
      new ground against the collision (sink, float, holes, standing over
-     the path). Not installed; the art brief for the start area next. Light carried over from the baked
+     the path). Not installed.
+   - The start area's ground brief (2026-11-26, the owner's "Yes, write
+     it"): docs/remaster/art-briefs/g1-start-ground.md, in the art folder's
+     G1_Ground with the eight pieces' exports, the level scene, the
+     checker and pictures of the area. Waiting for the art; install the
+     light carry-over build with it. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -695,4 +700,6 @@ memory. The port stays the base.
       for the art.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
-      2026-11-26 (decisions/0035); the art brief for G1's start area next.
+      2026-11-26 (decisions/0035); the art brief for G1's start area
+      written 2026-11-26 (art-briefs/g1-start-ground.md); waiting for the
+      art.
