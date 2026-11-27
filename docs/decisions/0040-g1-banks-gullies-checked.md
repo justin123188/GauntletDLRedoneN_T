@@ -100,4 +100,4 @@ fine". G1's start area ground is accepted as installed: the fix round's
 path and walked-on pieces, and these banks.
 
 Next (models-plan M6 step 4): the rest of G1, then each level's terrain
-in its overhaul.
+in its overhaul. The rest of G1's brief: decisions/0041.
