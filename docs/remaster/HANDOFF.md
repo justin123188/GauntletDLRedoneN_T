@@ -567,8 +567,11 @@ later. And effects look better mostly through their textures.
      to 5 levels of the original's, against 1.5 to 3.5 times as bright
      before. The hashes, frame times and load are as in 0036. Installed
      2026-11-27, the build of ee48b64 with the pack in model_pack\G1 (the
-     previous exe as gdl_play-f5reload-backup.exe). The owner's playtest
-     next. Light carried over from the baked
+     previous exe as gdl_play-f5reload-backup.exe). The owner liked the
+     path's colour, and chose the original's vertical gullies over the
+     level layers for the banks (decisions/0039). The gullies brief is in
+     the art folder's G1_Ground/G1_Banks_Gullies_Brief.md. Waiting for
+     the art. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -725,4 +728,5 @@ memory. The port stays the base.
       2026-11-26 (decisions/0036); the carried light fixed and the colour
       checker 2026-11-27 (decisions/0037); the fix brief written
       2026-11-27; the fix round checked and installed 2026-11-27
-      (decisions/0038); the owner's playtest next.
+      (decisions/0038); the banks' gullies brief 2026-11-27
+      (decisions/0039); waiting for the art.

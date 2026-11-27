@@ -177,3 +177,25 @@ Delivered the same day (2026-11-27), checked in decisions/0038:
 - In the game the colour is close to the original's.
 - No recess material was added. The walked-on pieces are unchanged, with
   only the path texture repainted.
+
+Installed 2026-11-27.
+
+## Gullies round
+
+2026-11-27 (the owner's "Brief the gullies", decisions/0039): the art
+folder's G1_Ground/G1_Banks_Gullies_Brief.md, with
+G1_Banks_Gullies_Reference.png. The reference shows the original's side
+and slope textures with notes, and three views of the original against
+the fix round.
+
+The banks (G1#000, G1#001, G1#030, and G1#028 with shallower gullies)
+trade the level layers for the original's vertical gullies:
+- gullies down the fall line every 2 to 4 units, 0.4 to 1.0 wide and 0.3
+  to 0.8 deep, between rounded ribs;
+- an overhanging lip with hanging roots over a dark undercut;
+- fans of mud at the waterline;
+- the bank texture's vertical down the slope;
+- a dark gully material allowed.
+
+The path, the walked-on pieces, G1#029, the colours and the rules stay.
+G1#001's repeated triangles and G1#000's zero-area ones go.

@@ -282,7 +282,9 @@ that one job.
       originals' (tools/blender/check_colour.py), bolder bank relief.
       Delivered and checked the same day (decisions/0038): both checkers
       pass; the colour is close to the original's in the game. Installed
-      2026-11-27.
+      2026-11-27. The banks then get the original's vertical gullies in
+      place of level layers (decisions/0039, the owner's choice). Keep
+      the layered style for a drier realm.
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.

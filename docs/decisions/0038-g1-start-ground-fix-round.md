@@ -120,3 +120,6 @@ Installed 2026-11-27 (the owner's "Yes, install"):
   decisions/0035, so it does not carry the light over.
 
 Not yet: the owner's playtest.
+
+Later (2026-11-27): the owner liked the path's colour, and chose the
+original's vertical gullies for the banks (decisions/0039).
