@@ -745,7 +745,10 @@ memory. The port stays the base.
       art-briefs/g1-rest-ground.md): 45 pieces in four areas, A first.
       Area A checked and installed 2026-11-27 (decisions/0043). Area B
       checked 2026-11-27 (decisions/0046): it passes, but the meadow has
-      lost the original's terraces; the owner's choice next. The order after it (decisions/0044, the owner's choice):
+      lost the original's terraces. A fix round for the meadow's texture
+      (decisions/0048, the art folder's G1_Meadow_Terraces_Brief.md),
+      with check_colour.py corrected to fixed sizes in game units;
+      waiting for the art. The order after it (decisions/0044, the owner's choice):
       areas B to D, the junk chest's props, the gems while the game gets
       plant support and a look at G1's load time, then G1's buildings
       and plants. Plants through the model pack checked and fixed

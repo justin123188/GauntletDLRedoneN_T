@@ -16,12 +16,15 @@ colour its textures lay on the surface sets its colour in the game.
 
 What it measures, per piece: each triangle's texture sampled at random
 points, weighted by area (the base colour texture times its factor, the
-UVs repeating), from box-filtered mips: 1/8 (close up) for the mean colour
-per material and in all, in texels 0..255; and the relative contrast (the
-luma's standard deviation over its mean) at 1/8 and at 1/32 (the pattern
-that survives at the game's camera distance). Marks a channel of the mean
-off by more than the tolerance (new / original), and a contrast at the
-camera below that share of the original's.
+UVs repeating), from box-filtered mips at fixed sizes in game units, so
+that a 128 px original and a 2048 px replacement are seen alike (each
+primitive's texel size from its UVs and its texture's width;
+decisions/0048): 0.5 units (close up) for the mean colour per material and
+in all, in texels 0..255; and the relative contrast (the luma's standard
+deviation over its mean) at 0.5 units and at 2 units (the pattern that
+survives at the game's camera distance). Marks a channel of the mean off
+by more than the tolerance (new / original), and a contrast at the camera
+below that share of the original's.
 """
 import json
 import os
@@ -34,6 +37,8 @@ import numpy as np
 CT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 SAMPLES = 6
+# The contrast's sizes in game units: close up, and at the camera.
+CLOSE, CAMERA = 0.5, 2.0
 
 
 def load(path):
@@ -202,31 +207,37 @@ def luma(c):
 
 def measure(path, seed=1):
     """Per material: (share of the area, mean colour); in all: the mean
-    colour and the relative contrast at 1/8 and 1/32."""
+    colour and the relative contrast at CLOSE and CAMERA game units."""
     js, bin_ = load(path)
     rng = np.random.default_rng(seed)
-    per, far = {}, {8: [], 32: []}
+    per, far = {}, {CLOSE: [], CAMERA: []}
     for pos, uv, idx, mat in primitives(js, bin_):
         img, fac, name = texture(path, js, bin_, mat)
         tri = idx.reshape(-1, 3)
         P = pos[tri]
         area = 0.5 * np.linalg.norm(np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0]), axis=1)
         U = uv[tri]
+        uv_area = 0.5 * np.abs((U[:, 1, 0] - U[:, 0, 0]) * (U[:, 2, 1] - U[:, 0, 1]) - (U[:, 2, 0] - U[:, 0, 0]) * (U[:, 1, 1] - U[:, 0, 1]))
+        # Game units per texel: the area one repeat of the texture covers,
+        # over its texels (a non-square texture's texels averaged).
+        texel = np.sqrt(area.sum() / max(uv_area.sum() * img.shape[0] * img.shape[1], 1e-12)) if img is not None else 1.0
         r = rng.random((len(tri), SAMPLES, 2))
         flip = r.sum(2) > 1
         r[flip] = 1 - r[flip]
         at = U[:, None, 0] * (1 - r[..., :1] - r[..., 1:]) + U[:, None, 1] * r[..., :1] + U[:, None, 2] * r[..., 1:]
-        for f in (8, 32):
+        for f in (CLOSE, CAMERA):
             if img is None:
                 c = np.broadcast_to(fac * 255, (len(tri), SAMPLES, 3))
             else:
-                m = mip(img, f)
+                # The mip nearest that size, a power of two (the textures'
+                # sides divide it, so none is cropped).
+                m = mip(img, 2 ** max(0, int(round(np.log2(max(f / max(texel, 1e-9), 1.0))))))
                 h, w = m.shape[:2]
                 x = np.floor(np.mod(at[..., 0], 1.0) * w).astype(int) % w
                 y = np.floor(np.mod(at[..., 1], 1.0) * h).astype(int) % h
                 c = m[y, x] * fac
             far[f].append((luma(c).ravel(), np.repeat(area, SAMPLES)))
-            if f == 8:
+            if f == CLOSE:
                 a = per.setdefault(name, [0.0, np.zeros(3)])
                 a[0] += area.sum()
                 a[1] += (c.mean(1) * area[:, None]).sum(0)
@@ -259,11 +270,11 @@ def show(orig, new, tolerance, share):
         print("      %5.1f %%  %-24s %s" % (100 * s, k[:24], rgb(c)))
     verdict = "OFF (more than %.0f %%)" % (100 * tolerance) if off.any() else "within"
     print("  new / original: %.2f %.2f %.2f %s" % (ratio[0], ratio[1], ratio[2], verdict))
-    for f, label in ((8, "close up"), (32, "at the camera")):
+    for f, label in ((CLOSE, "close up"), (CAMERA, "at the camera")):
         low = cn[f] < share * co[f]
         mark = "LOW (under %.0f %% of the original's)" % (100 * share) if low else "ok"
-        print("  contrast %s: original %2.0f %%, new %2.0f %% %s" % (label, 100 * co[f], 100 * cn[f], mark))
-    return not off.any() and cn[32] >= share * co[32]
+        print("  contrast %s (%g units): original %2.0f %%, new %2.0f %% %s" % (label, f, 100 * co[f], 100 * cn[f], mark))
+    return not off.any() and cn[CAMERA] >= share * co[CAMERA]
 
 
 def main(argv):

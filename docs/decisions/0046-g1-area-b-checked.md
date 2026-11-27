@@ -59,3 +59,8 @@ Checked here (2026-11-27, the owner's PC):
 
 Not yet: the owner's choice on the meadow (as it is, or a fix round for
 G1#018's texture), the install, area C.
+
+Later (2026-11-27): the owner chose a fix round for the meadow's
+terraces. While writing it, the colour checker was found to compare
+contrast at different sizes, and now measures at fixed sizes in game
+units (decisions/0048).
