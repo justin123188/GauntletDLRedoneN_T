@@ -280,6 +280,8 @@ that one job.
       day (decisions/0036). A fix round 2026-11-27 (decisions/0037,
       the brief's "Fix round"): the colour and contrast against the
       originals' (tools/blender/check_colour.py), bolder bank relief.
+      Delivered and checked the same day (decisions/0038): both checkers
+      pass; the colour is close to the original's in the game.
    4. **In the game:** frozen frames, the checker's report, the
       simulation hashes (the collision is the original's), the owner's
       playtest; then the rest of G1, then each level in its overhaul.

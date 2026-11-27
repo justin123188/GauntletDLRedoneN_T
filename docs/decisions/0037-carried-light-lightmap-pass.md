@@ -113,3 +113,7 @@ G1_Start_Ground_Fix_Views.png) asks for three changes:
 The rules stay the same.
 
 Not yet: the art, the install (this build with it), the owner's playtest.
+
+Later (2026-11-27): the fix round came back the same day and passes both
+checkers; in the game its colour is close to the original's
+(decisions/0038).

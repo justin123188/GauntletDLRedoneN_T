@@ -168,3 +168,12 @@ walked-on pieces keep their shape, nothing over the path, the seams
 closed, below the waterline, vertices at most 0.5 apart. Hand back: the
 eight files, both checkers' output, and renders of the banks from about
 the game's camera beside the original.
+
+Delivered the same day (2026-11-27), checked in decisions/0038:
+- check_colour.py says "all within", and the ground checker gives the
+  first round's figures.
+- The banks stand off the original by a median of 0.15 to 0.27, at most
+  1.25 to 1.71.
+- In the game the colour is close to the original's.
+- No recess material was added. The walked-on pieces are unchanged, with
+  only the path texture repainted.

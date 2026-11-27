@@ -561,8 +561,13 @@ later. And effects look better mostly through their textures.
      the textures' colour and contrast with the original's; the fix brief
      (art-briefs/g1-start-ground.md "Fix round", the art folder's
      G1_Ground/G1_Start_Ground_Fix_Brief.md) asks for G1's colours, the
-     banks' light and dark, and bolder relief. Not installed; waiting for
-     the art (install the build of 0037 with it). Light carried over from the baked
+     banks' light and dark, and bolder relief. The fix round came back
+     the same day (decisions/0038). Both checkers pass, with the banks
+     two to three times deeper. In the game the colour is within about 1
+     to 5 levels of the original's, against 1.5 to 3.5 times as bright
+     before. The hashes, frame times and load are as in 0036. Not
+     installed; the owner's look and the install (the build of 0037 with
+     the pack) next. Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -718,4 +723,5 @@ memory. The port stays the base.
       written 2026-11-26 (art-briefs/g1-start-ground.md); the art checked
       2026-11-26 (decisions/0036); the carried light fixed and the colour
       checker 2026-11-27 (decisions/0037); the fix brief written
-      2026-11-27; waiting for the art.
+      2026-11-27; the fix round checked 2026-11-27 (decisions/0038); the
+      owner's look and the install next.
