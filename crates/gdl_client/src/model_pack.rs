@@ -660,7 +660,18 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
         };
         (d, at.elapsed())
     });
-    let longest_job = timed.iter().map(|(_, t)| *t).max().unwrap_or_default();
+    let (longest_job, longest_what) = timed
+        .iter()
+        .zip(&jobs)
+        .max_by_key(|((_, t), _)| *t)
+        .map(|((_, t), j)| {
+            let what = match j {
+                Job::Mips(t) => format!("mipmaps {}x{}", t.0, t.1),
+                Job::Detail(t, _, line, _) => format!("detail map {}x{} {}", t.0, t.1, line.kind.name()),
+            };
+            (*t, what)
+        })
+        .unwrap_or_default();
     let mut done: Vec<Option<Done>> = timed.into_iter().map(|(d, _)| Some(d)).collect();
     let work = started.elapsed() - read;
     let mut carry_time = std::time::Duration::ZERO;
@@ -670,32 +681,59 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     let mut details: HashMap<(u64, u16, DetailKey), Handle<Image>> = HashMap::new();
     let mut ramp: Option<Handle<Image>> = None;
     let files = loaded.len();
-    for (index, label, path, original, new) in loaded {
+    // NATIVE (decisions/0035, 0037): scenery drawn with baked light takes
+    // the original's (light_transfer: each vertex the light of the nearest
+    // point of the original's surface, drawn as the scenery draws: the
+    // vertex colour, and the lightmap through the ramp where the original
+    // has one); items and characters keep the live light. Each object's
+    // surface first, in order (it reads the original's assets); then every
+    // vertex's light on the machine's threads, in runs of CARRY_RUN
+    // vertices (pure work, the same result as one at a time;
+    // decisions/0049).
+    let carrying = std::time::Instant::now();
+    let sources: Vec<Option<crate::light_transfer::Source>> = loaded
+        .iter()
+        .map(|(index, _, _, original, _)| {
+            let baked = !original.lit && original.params.light_dir.w.abs() < 0.5 && !original.draw.additive;
+            if baked { parts.get(index).and_then(|l| crate::light_transfer::source_of(l, meshes, materials, images)) } else { None }
+        })
+        .collect();
+    let mut runs: Vec<(usize, usize, usize, usize)> = Vec::new();
+    for (f, (_, _, _, _, new)) in loaded.iter().enumerate() {
+        if sources[f].is_none() {
+            continue;
+        }
+        for (i, p) in new.iter().enumerate() {
+            for start in (0..p.positions.len()).step_by(CARRY_RUN) {
+                runs.push((f, i, start, (start + CARRY_RUN).min(p.positions.len())));
+            }
+        }
+    }
+    let lit: Vec<Carried> = run_parallel(&runs, |&(f, i, start, end)| {
+        let s = sources[f].as_ref().expect("a run only for a file with a surface");
+        loaded[f].4[i].positions[start..end].iter().map(|v| s.baked_at(Vec3::from_array(*v))).collect()
+    });
+    let mut carried: HashMap<(usize, usize), Carried> = HashMap::new();
+    for (&(f, i, _, _), run) in runs.iter().zip(lit) {
+        carried.entry((f, i)).or_default().extend(run);
+    }
+    carry_time += carrying.elapsed();
+    for (f, ((index, label, path, original, new), source)) in loaded.into_iter().zip(sources).enumerate() {
         let mut made: HashMap<MadeKey, Handle<GsMaterial>> = HashMap::new();
         let mut list = Vec::new();
         let mut triangles = 0;
-        // NATIVE (decisions/0035, 0037): scenery drawn with baked light
-        // takes the original's (light_transfer: each vertex the light of
-        // the nearest point of the original's surface, drawn as the scenery
-        // draws: the vertex colour, and the lightmap through the ramp where
-        // the original has one); items and characters keep the live light.
-        let baked = !original.lit && original.params.light_dir.w.abs() < 0.5 && !original.draw.additive;
-        let source = if baked { parts.get(&index).and_then(|l| crate::light_transfer::source_of(l, meshes, materials, images)) } else { None };
-        for p in new {
+        for (i, p) in new.into_iter().enumerate() {
             triangles += p.indices.len() / 3;
             let n = p.positions.len();
             let flags = address_flags(&p);
             let line = detail_line(&table, &p);
-            let carrying = std::time::Instant::now();
-            let (colours, lightmap_uvs): (Vec<[f32; 4]>, Option<Vec<[f32; 2]>>) = match &source {
-                Some(s) => {
-                    let at: Vec<(Vec3, Option<f32>)> = p.positions.iter().map(|v| s.baked_at(Vec3::from_array(*v))).collect();
+            let (colours, lightmap_uvs): (Vec<[f32; 4]>, Option<Vec<[f32; 2]>>) = match carried.remove(&(f, i)) {
+                Some(at) => {
                     let uvs = at.iter().any(|(_, lm)| lm.is_some()).then(|| at.iter().map(|(_, lm)| crate::light_transfer::ramp_uv(lm.unwrap_or(1.0))).collect());
                     (at.iter().map(|(c, _)| c.extend(1.0).to_array()).collect(), uvs)
                 }
                 None => (vec![[1.0f32; 4]; n], None),
             };
-            carry_time += carrying.elapsed();
             let lightmapped = lightmap_uvs.is_some();
             let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p.positions)
@@ -769,7 +807,7 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
     if std::env::var_os("GDL_FRAME_LOG").is_some() {
         let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
         eprintln!(
-            "PERF model_pack {package} {files} files: read and decode {:.0} ms (PNG decoding {:.0}), mipmaps and detail maps {:.0} ms ({} jobs, the longest {:.0}), parts {:.0} ms (light carried {:.0}), all {:.0} ms",
+            "PERF model_pack {package} {files} files: read and decode {:.0} ms (PNG decoding {:.0}), mipmaps and detail maps {:.0} ms ({} jobs, the longest {:.0}: {longest_what}), parts {:.0} ms (light carried {:.0}), all {:.0} ms",
             ms(read),
             ms(textures.decode_time),
             ms(work),
@@ -781,6 +819,13 @@ pub fn apply(package: &str, objects: &Objects, parts: &mut Parts, meshes: &mut A
         );
     }
 }
+
+/// Vertices per run of the carried light's work on the threads.
+const CARRY_RUN: usize = 4096;
+
+/// Each vertex's carried light: the colour and, where the original's
+/// triangle has one, the lightmap.
+type Carried = Vec<(Vec3, Option<f32>)>;
 
 /// A part's texture address modes as TEXDEF flags (0x4 U clamp, 0x8 V).
 fn address_flags(p: &NewPart) -> u16 {

@@ -407,6 +407,13 @@ pub fn report(name: &str, label: &str, kind: Kind, guessed: bool, class: &str) {
 
 static WATER: AtomicBool = AtomicBool::new(false);
 
+/// Texels of a detail map from which its rows go to the threads.
+const PARALLEL_TEXELS: u32 = 256 * 256;
+
+/// Whether a large detail map's rows go to the threads (on; a test makes
+/// the same map both ways).
+static PARALLEL: AtomicBool = AtomicBool::new(true);
+
 /// NATIVE (this fork, decisions/0016): whether the textures prepared from
 /// now on mark water surfaces for gs.wgsl's water (Settings::water_effects;
 /// the next level's).
@@ -498,50 +505,68 @@ fn detail_of(src: &Source, line: Line, guessed: bool, inputs: Inputs) -> Detail 
     // same bump.
     let strength = p.bump * BUMP_SCALE * (w as f32 / src.record_width.max(1) as f32);
     let mut out = vec![0u8; (w * h * 4) as usize];
-    for y in 0..h {
-        for x in 0..w {
-            let i = (y * w + x) as usize;
-            let t = &mut out[i * 4..i * 4 + 4];
-            if !opaque[i] && normal.is_none() {
-                t.copy_from_slice(&FLAT);
-                continue;
-            }
-            let c = heights[i];
-            // A neighbour's height (a clear texel's is the centre's: the
-            // cut-out's edge is no slope).
-            let at = |dx: i32, dy: i32| -> f32 {
-                let (nx, ny) = (x as i32 + dx, y as i32 + dy);
-                let nx = if wrap.0 { nx.rem_euclid(w as i32) } else { nx.clamp(0, w as i32 - 1) };
-                let ny = if wrap.1 { ny.rem_euclid(h as i32) } else { ny.clamp(0, h as i32 - 1) };
-                let j = (ny as u32 * w + nx as u32) as usize;
-                if opaque[j] { heights[j] } else { c }
-            };
-            let (nx, ny) = match &normal {
-                Some(n) => (n[i * 4], n[i * 4 + 1]),
-                None => {
-                    // Sobel: the slope to the right and downwards (rows).
-                    let gx = (at(1, -1) + 2.0 * at(1, 0) + at(1, 1)) - (at(-1, -1) + 2.0 * at(-1, 0) + at(-1, 1));
-                    let gy = (at(-1, 1) + 2.0 * at(0, 1) + at(1, 1)) - (at(-1, -1) + 2.0 * at(0, -1) + at(1, -1));
-                    let (sx, sy) = (gx / 8.0 * strength, gy / 8.0 * strength);
-                    // n = (−dh/dx, dh/drow, 1): the surface rising to the
-                    // right faces left; rising downwards it faces the
-                    // image's top (green up).
-                    let len = (sx * sx + sy * sy + 1.0).sqrt();
-                    (unorm(-sx / len), unorm(sy / len))
+    // Rows y0.. into `band` (whole rows).
+    let rows = |y0: u32, band: &mut [u8]| {
+        for (r, row) in band.chunks_exact_mut((w * 4) as usize).enumerate() {
+            let y = y0 + r as u32;
+            for x in 0..w {
+                let i = (y * w + x) as usize;
+                let t = &mut row[x as usize * 4..x as usize * 4 + 4];
+                if !opaque[i] && normal.is_none() {
+                    t.copy_from_slice(&FLAT);
+                    continue;
                 }
-            };
-            let r = match &rough {
-                Some(r) => r[i * 4],
-                // Darker hollows a little rougher than the type, brighter
-                // tops a little smoother (bumpy types only).
-                None => to_u8((p.rough + if 0.0 < p.bump { (0.5 - c) * 0.3 } else { 0.0 }).clamp(0.03, 1.0)),
-            };
-            let m = match &metal {
-                Some(m) => m[i * 4],
-                None => to_u8(p.metal),
-            };
-            t.copy_from_slice(&[nx, ny, r, m]);
+                let c = heights[i];
+                // A neighbour's height (a clear texel's is the centre's: the
+                // cut-out's edge is no slope).
+                let at = |dx: i32, dy: i32| -> f32 {
+                    let (nx, ny) = (x as i32 + dx, y as i32 + dy);
+                    let nx = if wrap.0 { nx.rem_euclid(w as i32) } else { nx.clamp(0, w as i32 - 1) };
+                    let ny = if wrap.1 { ny.rem_euclid(h as i32) } else { ny.clamp(0, h as i32 - 1) };
+                    let j = (ny as u32 * w + nx as u32) as usize;
+                    if opaque[j] { heights[j] } else { c }
+                };
+                let (nx, ny) = match &normal {
+                    Some(n) => (n[i * 4], n[i * 4 + 1]),
+                    None => {
+                        // Sobel: the slope to the right and downwards (rows).
+                        let gx = (at(1, -1) + 2.0 * at(1, 0) + at(1, 1)) - (at(-1, -1) + 2.0 * at(-1, 0) + at(-1, 1));
+                        let gy = (at(-1, 1) + 2.0 * at(0, 1) + at(1, 1)) - (at(-1, -1) + 2.0 * at(0, -1) + at(1, -1));
+                        let (sx, sy) = (gx / 8.0 * strength, gy / 8.0 * strength);
+                        // n = (−dh/dx, dh/drow, 1): the surface rising to the
+                        // right faces left; rising downwards it faces the
+                        // image's top (green up).
+                        let len = (sx * sx + sy * sy + 1.0).sqrt();
+                        (unorm(-sx / len), unorm(sy / len))
+                    }
+                };
+                let r = match &rough {
+                    Some(r) => r[i * 4],
+                    // Darker hollows a little rougher than the type, brighter
+                    // tops a little smoother (bumpy types only).
+                    None => to_u8((p.rough + if 0.0 < p.bump { (0.5 - c) * 0.3 } else { 0.0 }).clamp(0.03, 1.0)),
+                };
+                let m = match &metal {
+                    Some(m) => m[i * 4],
+                    None => to_u8(p.metal),
+                };
+                t.copy_from_slice(&[nx, ny, r, m]);
+            }
         }
+    };
+    // NATIVE (decisions/0049): a large map's rows in bands on the machine's
+    // threads, the same texels as one band.
+    let threads = std::thread::available_parallelism().map_or(1, |t| t.get()).min((h / 16).max(1) as usize);
+    if PARALLEL_TEXELS <= w * h && 1 < threads && PARALLEL.load(Ordering::Relaxed) {
+        let band_rows = h.div_ceil(threads as u32);
+        let rows = &rows;
+        std::thread::scope(|s| {
+            for (b, band) in out.chunks_mut((band_rows * w * 4) as usize).enumerate() {
+                s.spawn(move || rows(b as u32 * band_rows, band));
+            }
+        });
+    } else {
+        rows(0, &mut out);
     }
     let levels = chain(w, h, out);
     Detail { width: w, height: h, levels, kind, guessed, inputs }
@@ -753,6 +778,30 @@ mod tests {
             ("MOHANDGEM_GRE", Kind::Gem),
         ] {
             assert_eq!(guess(label), kind, "{label}");
+        }
+    }
+
+    /// A large detail map made in bands on the threads is the same bytes as
+    /// made in one band (decisions/0049), opaque and cut out.
+    #[test]
+    fn banded_detail_maps_equal_one_band() {
+        let (w, h) = (512u32, 512u32);
+        for cut in [false, true] {
+            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let v = ((x * 7 + y * 13) ^ (x * y)) as u8;
+                    let a = if cut && (x / 3 + y / 5) % 4 == 0 { 0 } else { 0x80 };
+                    rgba.extend_from_slice(&[v, v.wrapping_mul(3), v.wrapping_add(90), a]);
+                }
+            }
+            let src = Source { name: "", label: "", width: w, height: h, rgba: &rgba, record_width: w, flags: 0 };
+            let line = Line { kind: Kind::Ground, bump: None, rough: None, metal: None };
+            PARALLEL.store(false, Ordering::Relaxed);
+            let one = make_for(&src, line.clone()).levels;
+            PARALLEL.store(true, Ordering::Relaxed);
+            let banded = make_for(&src, line).levels;
+            assert_eq!(banded, one, "cut-out {cut}");
         }
     }
 

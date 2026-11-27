@@ -753,5 +753,6 @@ memory. The port stays the base.
       plant support and a look at G1's load time, then G1's buildings
       and plants. Plants through the model pack checked and fixed
       2026-11-27 (decisions/0045: marked with material detail off; CORN
-      as a word, so corners no longer sway); the load measured; not
-      installed.
+      as a word, so corners no longer sway); the load measured. G1's
+      load on the threads 2026-11-27 (decisions/0049): about 1.5 s
+      sooner with areas A and B, the same frames; neither installed.

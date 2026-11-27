@@ -261,10 +261,18 @@ fn linear_to_srgb(c: f32) -> u8 {
     (s * 255.0 + 0.5).floor().clamp(0.0, 255.0) as u8
 }
 
+/// Texels of a mipmap level from which its rows go to the threads.
+const PARALLEL_TEXELS: u32 = 256 * 256;
+
 /// Levels after the last of `levels` down to 1×1 (empty when complete).
 /// Level 0 decides the texture's class: cut-out (some texels rejected, the
 /// rest at least 0x80), or otherwise alpha averaged as it is.
 pub fn generate(width: u32, height: u32, levels: &[Vec<u8>]) -> Vec<Vec<u8>> {
+    generate_on(width, height, levels, true)
+}
+
+/// [`generate`], its large levels' rows on the threads or not.
+fn generate_on(width: u32, height: u32, levels: &[Vec<u8>], parallel: bool) -> Vec<Vec<u8>> {
     let total = full_levels(width, height);
     let Some(mut prev) = levels.last().cloned() else { return Vec::new() };
     let mut k = levels.len() as u32;
@@ -278,46 +286,66 @@ pub fn generate(width: u32, height: u32, levels: &[Vec<u8>]) -> Vec<Vec<u8>> {
         let (pw, ph) = level_size(width, height, k - 1);
         let (w, h) = level_size(width, height, k);
         let mut next = vec![0u8; (w * h * 4) as usize];
-        let mut alphas = Vec::with_capacity((w * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let (mut rgb, mut weight, mut alpha, mut n) = ([0.0f32; 3], 0.0f32, 0.0f32, 0.0f32);
-                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                    let (sx, sy) = ((2 * x + dx).min(pw - 1), (2 * y + dy).min(ph - 1));
-                    let p = &prev[((sy * pw + sx) * 4) as usize..][..4];
-                    let a = f32::from(p[3]);
-                    // Cut-outs average only texels the test passes; other
-                    // textures weight colour by alpha (no dark fringes from
-                    // transparent texels), or plainly where all are clear.
-                    let wgt = if cutout { if p[3] >= PASS { 1.0 } else { 0.0 } } else { a };
-                    for c in 0..3 {
-                        rgb[c] += lut[p[c] as usize] * wgt;
-                    }
-                    weight += wgt;
-                    alpha += a;
-                    n += 1.0;
-                }
-                let o = ((y * w + x) * 4) as usize;
-                if weight <= 0.0 {
-                    // All clear: the plain average keeps the texels' colour.
-                    rgb = [0.0; 3];
+        // Rows y0.. of this level into `band` (whole rows), their averaged
+        // alphas returned in order.
+        let rows = |y0: u32, band: &mut [u8]| -> Vec<f32> {
+            let mut alphas = Vec::with_capacity(band.len() / 4);
+            for (r, row) in band.chunks_exact_mut((w * 4) as usize).enumerate() {
+                let y = y0 + r as u32;
+                for x in 0..w {
+                    let (mut rgb, mut weight, mut alpha, mut n) = ([0.0f32; 3], 0.0f32, 0.0f32, 0.0f32);
                     for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
                         let (sx, sy) = ((2 * x + dx).min(pw - 1), (2 * y + dy).min(ph - 1));
                         let p = &prev[((sy * pw + sx) * 4) as usize..][..4];
+                        let a = f32::from(p[3]);
+                        // Cut-outs average only texels the test passes; other
+                        // textures weight colour by alpha (no dark fringes from
+                        // transparent texels), or plainly where all are clear.
+                        let wgt = if cutout { if p[3] >= PASS { 1.0 } else { 0.0 } } else { a };
                         for c in 0..3 {
-                            rgb[c] += lut[p[c] as usize];
+                            rgb[c] += lut[p[c] as usize] * wgt;
                         }
+                        weight += wgt;
+                        alpha += a;
+                        n += 1.0;
                     }
-                    weight = n;
+                    let o = (x * 4) as usize;
+                    if weight <= 0.0 {
+                        // All clear: the plain average keeps the texels' colour.
+                        rgb = [0.0; 3];
+                        for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                            let (sx, sy) = ((2 * x + dx).min(pw - 1), (2 * y + dy).min(ph - 1));
+                            let p = &prev[((sy * pw + sx) * 4) as usize..][..4];
+                            for c in 0..3 {
+                                rgb[c] += lut[p[c] as usize];
+                            }
+                        }
+                        weight = n;
+                    }
+                    for c in 0..3 {
+                        row[o + c] = linear_to_srgb(rgb[c] / weight);
+                    }
+                    let a = alpha / n;
+                    row[o + 3] = (a + 0.5).floor().min(255.0) as u8;
+                    alphas.push(a);
                 }
-                for c in 0..3 {
-                    next[o + c] = linear_to_srgb(rgb[c] / weight);
-                }
-                let a = alpha / n;
-                next[o + 3] = (a + 0.5).floor().min(255.0) as u8;
-                alphas.push(a);
             }
-        }
+            alphas
+        };
+        // NATIVE (decisions/0049): a large level's rows in bands on the
+        // machine's threads, the same texels as one band.
+        let threads = std::thread::available_parallelism().map_or(1, |t| t.get()).min((h / 16).max(1) as usize);
+        let alphas: Vec<f32> = if parallel && PARALLEL_TEXELS <= w * h && 1 < threads {
+            let band_rows = h.div_ceil(threads as u32);
+            let rows = &rows;
+            std::thread::scope(|s| {
+                let workers: Vec<_> =
+                    next.chunks_mut((band_rows * w * 4) as usize).enumerate().map(|(b, band)| s.spawn(move || rows(b as u32 * band_rows, band))).collect();
+                workers.into_iter().flat_map(|t| t.join().expect("a mipmap band")).collect()
+            })
+        } else {
+            rows(0, &mut next)
+        };
         if cutout {
             binarise(&mut next, w, &alphas, coverage);
         }
@@ -376,6 +404,24 @@ mod tests {
         // The disc's own levels are continued, not replaced.
         let own = vec![vec![0u8; 8 * 8 * 4], vec![0u8; 4 * 4 * 4]];
         assert_eq!(generate(8, 8, &own).iter().map(|l| l.len() / 4).collect::<Vec<_>>(), vec![4, 1]);
+    }
+
+    /// A large texture's levels made in bands on the threads are the same
+    /// bytes as made in one band (decisions/0049), blended and cut out.
+    #[test]
+    fn banded_mipmaps_equal_one_band() {
+        let (w, h) = (1024u32, 512u32);
+        for cut in [false, true] {
+            let mut l0 = Vec::with_capacity((w * h * 4) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let v = ((x * 7 + y * 13) ^ (x * y)) as u8;
+                    let a = if cut { if (x / 3 + y / 5) % 4 == 0 { 0 } else { 0x80 } } else { ((x + 2 * y) % 129) as u8 };
+                    l0.extend_from_slice(&[v, v.wrapping_mul(3), v.wrapping_add(90), a]);
+                }
+            }
+            assert_eq!(generate_on(w, h, std::slice::from_ref(&l0), true), generate_on(w, h, &[l0], false), "cut-out {cut}");
+        }
     }
 
     #[test]
