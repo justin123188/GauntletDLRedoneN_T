@@ -61,3 +61,7 @@ with G1_Banks_Gullies_Reference.png; art-briefs/g1-start-ground.md,
 The installed fix round stays in the game until the new art is checked.
 
 Not yet: the art, its check, the install, the owner's playtest.
+
+Later (2026-11-27): the art came back the same day and passes the
+checks; in the game the banks read as the original's gullies
+(decisions/0040).

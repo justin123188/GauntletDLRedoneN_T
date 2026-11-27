@@ -199,3 +199,10 @@ trade the level layers for the original's vertical gullies:
 
 The path, the walked-on pieces, G1#029, the colours and the rules stay.
 G1#001's repeated triangles and G1#000's zero-area ones go.
+
+Delivered the same day, checked in decisions/0040:
+- the four banks, a new gully texture and material, and both checkers
+  passing;
+- the textures' vertical within 20 degrees of the fall line on 95 to 99
+  % of each bank;
+- in the game, a mossy lip and vertical ribs.

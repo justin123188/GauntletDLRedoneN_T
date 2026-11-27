@@ -570,8 +570,10 @@ later. And effects look better mostly through their textures.
      previous exe as gdl_play-f5reload-backup.exe). The owner liked the
      path's colour, and chose the original's vertical gullies over the
      level layers for the banks (decisions/0039). The gullies brief is in
-     the art folder's G1_Ground/G1_Banks_Gullies_Brief.md. Waiting for
-     the art. Light carried over from the baked
+     the art folder's G1_Ground/G1_Banks_Gullies_Brief.md. The gullies
+     came back the same day and pass the checks (decisions/0040). Not
+     installed; the owner's look and the install next. Light carried
+     over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.
@@ -729,4 +731,5 @@ memory. The port stays the base.
       checker 2026-11-27 (decisions/0037); the fix brief written
       2026-11-27; the fix round checked and installed 2026-11-27
       (decisions/0038); the banks' gullies brief 2026-11-27
-      (decisions/0039); waiting for the art.
+      (decisions/0039); the gullies checked 2026-11-27 (decisions/0040);
+      the owner's look and the install next.
