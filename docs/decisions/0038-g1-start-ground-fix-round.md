@@ -105,5 +105,18 @@ Checked here (2026-11-27, the owner's PC):
     - The ramp's upper half and the higher ground's lower half are a
       little lighter.
 
-Not yet: the owner's look at the pictures, the install (the build of
-0037 with this pack), the owner's playtest.
+Installed 2026-11-27 (the owner's "Yes, install"):
+- The exe is the build of ee48b64 (decisions/0037, md5 65051ea4). The
+  previous exe is kept as gdl_play-f5reload-backup.exe (b9e9e5d, md5
+  bc0cda39).
+- The pack is in model_pack\G1: 14 files, the same hashes as the review
+  pack. model_pack now holds 992 .glb, 1,321 files, 277 MB.
+- Checked in the installed game, with an isolated APPDATA:
+  - The start and the west side load all eight pieces with the light
+    carried over, and there are no warnings.
+  - The frames are the scratch copy's but for the HUD's "LV 1" (619
+    pixels). The installed game has the owner's font.
+- To roll back, delete model_pack\G1 too. The backup build predates
+  decisions/0035, so it does not carry the light over.
+
+Not yet: the owner's playtest.
