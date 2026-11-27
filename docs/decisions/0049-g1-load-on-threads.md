@@ -64,4 +64,5 @@ Later, if areas C and D need it: that detail map's downscale and relief
 in bands, and the files read and parsed in parallel. Reading and
 decoding takes 0.56 s, of which the PNGs are 0.17 s.
 
-Not yet: the install, with decisions/0045's build changes.
+Installed 2026-11-27, with decisions/0045's build changes and the junk
+chest's props (decisions/0047, "Installed").

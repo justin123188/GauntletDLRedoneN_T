@@ -230,7 +230,8 @@ that one job.
    F5 reloads the model pack (decisions/0033) and the pickups package is
    built once (decisions/0034), 2026-11-26. The junk chest's props: brief
    2026-11-26 (art-briefs/junk-chest-props.md), the junk pickup's new
-   pipe, brick and wheel in the chest props' frames.
+   pipe, brick and wheel in the chest props' frames; checked 2026-11-27
+   (decisions/0047) and installed the same day in every world's items.
 6. **M6** Replacement ground for one level, with the collision checker.
    The owner (2026-11-26): M6 is a test on one level, and after it each
    level's terrain is part of that level's own overhaul; "I would also

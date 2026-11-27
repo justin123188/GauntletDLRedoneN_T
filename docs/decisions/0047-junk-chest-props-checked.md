@@ -43,5 +43,34 @@ Checked here (2026-11-27, the owner's PC):
   - The pipe passes through the brick on frames 0 to 3 and 10 to 14 of
     52; the original props overlap on 17.
 
-Not yet: the install into every world's items (ITEMS_A, B, D, E, F, G, H,
-I, J, K, S), with the three materials.tsv lines.
+## Installed
+
+2026-11-27 (the owner's "Yes, install"), with the build of
+decisions/0049 (md5 6e119bd2; the previous exe, d7ae700a, kept as
+gdl_play-loadthreads-backup.exe):
+- **The same three files in every world's items:** ITEMS_A, B, D, E, F,
+  G, H, I, J, K and S.
+  - The 11 worlds' junk chests are the same pack files.
+  - The original props have the same geometry in every world, in the
+    model export. Only the pipe's texture in D and I differs from the
+    others, by one texel.
+- **Each folder's materials.tsv** gained the three lines, under a
+  comment. The 11 tables are the same file. The previous tables are
+  kept as model_pack-ITEMS-tables-backup beside the game. To roll back,
+  put them back and delete the 33 props.
+- **The model pack:** 1,042 .glb, 1,374 files, 335 MB.
+
+Checked in the installed game (an isolated APPDATA):
+- **K1's junk chest,** shut, springing out (update 218 and 226) and
+  open, against the frames checked above:
+  - the same at the chest and the props;
+  - 619 pixels differ in each, all in the HUD's "LV 1" label, which
+    the installed game draws in the owner's font and the scratch copy
+    does not (seen at decisions/0043's install too).
+  - The three props load, and there are no messages.
+- **D1 and A1** load all three from their own items with no messages.
+- **G1** at its start, a1 and a2 is identical to the previous install's
+  frames (decisions/0043): the build's changes leave G1's pack as it
+  was.
+
+Not yet: the owner's look in the game (a junk chest opened).

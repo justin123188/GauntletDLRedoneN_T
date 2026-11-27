@@ -530,8 +530,11 @@ later. And effects look better mostly through their textures.
    - The junk chest's props (CHESTG0GROUP3, 4, 5: the wheel, the brick
      corner and the pipe, which spring out when the chest opens): brief
      2026-11-26, docs/remaster/art-briefs/junk-chest-props.md, in the art
-     folder's Junk_Chest_Props with the three originals. Waiting for the
-     art.
+     folder's Junk_Chest_Props with the three originals. Checked
+     2026-11-27 (decisions/0047) and installed the same day in every
+     world's items, with the build of decisions/0049 (6e119bd2; the
+     previous exe kept as gdl_play-loadthreads-backup.exe, the previous
+     item tables as model_pack-ITEMS-tables-backup).
    - The owner (2026-11-26): the heroes' and enemies' light (the colour
      items now take) waits for their new models (M8).
    - Next (models-plan.md M6): replacement ground for one level as a test
@@ -730,7 +733,8 @@ memory. The port stays the base.
 - [ ] F5 for the model pack and the pickups built once (decisions/0033,
       0034): installed 2026-11-26; the owner's F5 from the keyboard next.
 - [ ] The junk chest's props (art-briefs/junk-chest-props.md): checked
-      2026-11-27 (decisions/0047); not installed.
+      and installed 2026-11-27 (decisions/0047); the owner's look in the
+      game next (a junk chest opened).
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
@@ -755,4 +759,5 @@ memory. The port stays the base.
       2026-11-27 (decisions/0045: marked with material detail off; CORN
       as a word, so corners no longer sway); the load measured. G1's
       load on the threads 2026-11-27 (decisions/0049): about 1.5 s
-      sooner with areas A and B, the same frames; neither installed.
+      sooner with areas A and B, the same frames; both installed
+      2026-11-27 (6e119bd2, with the junk chest's props).

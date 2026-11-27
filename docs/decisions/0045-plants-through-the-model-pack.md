@@ -106,4 +106,5 @@ this change, md5 c8d7441e, against d7ae700a):
   longest texture job (one large texture) split, and the files read and
   parsed in parallel.
 
-Not yet: the install; the load-time work.
+The load-time work followed (decisions/0049). Installed 2026-11-27 with
+it (decisions/0047, "Installed").
