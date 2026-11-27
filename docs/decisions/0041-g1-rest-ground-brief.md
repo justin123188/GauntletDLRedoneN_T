@@ -114,3 +114,6 @@ G1_Ground/G1_Rest_Ground_Brief.md):
 
 Not yet: the art, area by area; its check; the install; the owner's
 playtest.
+
+Later (2026-11-27): RIVER_BANK_03 is now typed as ground
+(decisions/0042).

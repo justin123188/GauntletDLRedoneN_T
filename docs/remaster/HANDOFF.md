@@ -577,7 +577,10 @@ later. And effects look better mostly through their textures.
      the softer gullies the same day. The rest of G1's brief followed
      (decisions/0041): 45 more pieces in four areas, handed back one at a
      time. A test with G1's own pieces subdivided showed the frame times
-     unchanged and G1 about 3 s longer to load. Light carried over from the baked
+     unchanged and G1 about 3 s longer to load. The survey found G1's
+     river banks typed as water by their name (RIVER_BANK_03), which
+     gave them the water effect's glinting streak; a BANK rule now types
+     them as ground (decisions/0042, not installed). Light carried over from the baked
      scenery (option A) is for replaced scenery: items have no baked light
      (models-plan.md "Lighting new models").
    - Characters' skeletons come with M8.

@@ -142,6 +142,10 @@ const WORDS: &[(Kind, &[&str])] = &[
     ),
     // A wall at the water's edge (C1's BASIC_WALL_WATEREDGE) is stone.
     (Kind::Stone, &["WATEREDGE"]),
+    // A river's earth bank (G1's RIVER_BANK_03) is ground, not water
+    // (decisions/0042): the only label on the disc with BANK as a word of
+    // its own (MUDBANK and SANDBANK are ground already).
+    (Kind::Ground, &["=BANK"]),
     (Kind::Water, &["WATER", "WATR", "WAVE", "RAPID", "RIVER", "OCEAN", "FOAM", "RIPPLE", "POND", "LAKE", "SWAMP", "BOG"]),
     (Kind::Lava, &["LAVA", "MAGMA", "MOLTEN"]),
     (Kind::Gem, &["^GEM", "JEWEL", "RUBY", "EMERALD", "SAPPHIRE", "DIAMOND", "CRYSTAL", "AMETHYST", "TOPAZ", "PEARL", "^SHARD", "^OPAL"]),
@@ -715,6 +719,12 @@ mod tests {
             ("YEL_SOR_THIGH", Kind::Skin),
             ("INFERNO", Kind::Auto),
             ("BASIC_WALL_WATEREDGE", Kind::Stone),
+            // The banks (2026-11-27): earth, while the river stays water.
+            ("RIVER_BANK_03", Kind::Ground),
+            ("MUDBANK", Kind::Ground),
+            ("SANDBANK", Kind::Ground),
+            ("RIVERNEW", Kind::Water),
+            ("RAPIDS00", Kind::Water),
             // G1's plants (2026-11-22).
             ("CORN_SIDE", Kind::Foliage),
             ("MOSS_BRANCH", Kind::Foliage),
