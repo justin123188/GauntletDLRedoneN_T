@@ -744,4 +744,7 @@ memory. The port stays the base.
       The rest of G1's brief written 2026-11-27 (decisions/0041,
       art-briefs/g1-rest-ground.md): 45 pieces in four areas, A first.
       Area A checked and installed 2026-11-27 (decisions/0043); area B
-      next.
+      next. The order after it (decisions/0044, the owner's choice):
+      areas B to D, the junk chest's props, the gems while the game gets
+      plant support and a look at G1's load time, then G1's buildings
+      and plants.

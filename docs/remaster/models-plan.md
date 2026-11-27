@@ -293,7 +293,10 @@ that one job.
       (decisions/0040). The rest of G1: brief written 2026-11-27
       (art-briefs/g1-rest-ground.md, decisions/0041), four areas, A
       first. Area A checked and installed 2026-11-27 (decisions/0043).
-7. **M7** Replacement plants and trees, and the optional scatter.
+7. **M7** Replacement plants and trees, and the optional scatter. First
+   the game's side (decisions/0044): cut-out materials in the model pack,
+   and the plant effects (decisions/0017) on replaced plants. Then G1's
+   plants, with its buildings, to finish G1.
 8. **M8** Characters: rigid or skinned, your choice then.
 
 **Each step gets:**
