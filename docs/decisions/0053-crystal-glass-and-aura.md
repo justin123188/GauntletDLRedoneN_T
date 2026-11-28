@@ -73,4 +73,15 @@ of this change, md5 5b8aaffd, against 4986cfa7, the installed build):
 - **The simulation hashes** over the 600-update G1 walk, with the
   crystals, equal the reference in the defaults and the baseline.
 
-Not yet: the owner's look, and the install.
+## Installed
+
+2026-11-27 (the owner's "Yes, install"): the build of this change (md5
+5b8aaffd). The previous one (4986cfa7) is kept as
+gdl_play-glassaura-backup.exe. The model pack is unchanged.
+
+Checked in the installed game (an isolated APPDATA): B1, C1 and D1 are
+identical to the checked frames above, but for the HUD's "LV 1" label
+(619 pixels, the owner's font; decisions/0047). All 16 crystal files
+load, with no messages.
+
+Not yet: the owner's look in the game.

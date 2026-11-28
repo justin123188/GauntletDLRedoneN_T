@@ -744,7 +744,9 @@ memory. The port stays the base.
       previous exe kept as gdl_play-texslide-backup.exe). The gargoyle
       pieces next. The owner asked for more see-through crystals and a
       better aura: built 2026-11-27 (decisions/0053, F10 "See-through
-      crystals", the aura under "Gem and potion glow"); not installed.
+      crystals", the aura under "Gem and potion glow"); installed the same
+      day (5b8aaffd, the previous exe kept as
+      gdl_play-glassaura-backup.exe).
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
