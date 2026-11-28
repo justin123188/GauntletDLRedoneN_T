@@ -746,7 +746,9 @@ memory. The port stays the base.
       better aura: built 2026-11-27 (decisions/0053, F10 "See-through
       crystals", the aura under "Gem and potion glow"); installed the same
       day (5b8aaffd, the previous exe kept as
-      gdl_play-glassaura-backup.exe).
+      gdl_play-glassaura-backup.exe). The gargoyle pieces checked
+      2026-11-28 (decisions/0055): they pass; their glow light is a
+      little paler (it takes the texture's colour). The runestones next.
 - [ ] M6, replacement ground for one level (a test; terrain then in each
       level's overhaul): the light carry-over and the checker built
       2026-11-26 (decisions/0035); the art brief for G1's start area
@@ -767,7 +769,11 @@ memory. The port stays the base.
       fix came back and was checked 2026-11-27 (decisions/0051): the
       terraces are back, at the camera 15 % against the original's 14 %;
       area B installed the same day (the previous G1 pack kept as
-      model_pack-G1-areaA-backup). Areas C and D next. The order after it (decisions/0044, the owner's choice):
+      model_pack-G1-areaA-backup). Area C checked 2026-11-28
+      (decisions/0054): it passes the checkers and the game; the farmyard
+      is olive where the original's is green with red-brown earth, and
+      the western rock wall reads softer than the original's cracks.
+      Area D next. The order after it (decisions/0044, the owner's choice):
       areas B to D, the junk chest's props, the gems while the game gets
       plant support and a look at G1's load time, then G1's buildings
       and plants. Plants through the model pack checked and fixed

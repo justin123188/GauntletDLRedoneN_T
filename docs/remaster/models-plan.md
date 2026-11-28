@@ -237,6 +237,7 @@ that one job.
    crystals checked and installed the same day, with the original's
    texture slide carried to replacements (decisions/0052). See-through
    crystals and a smooth aura in the game the same day (decisions/0053).
+   The gargoyle pieces checked 2026-11-28 (decisions/0055).
 6. **M6** Replacement ground for one level, with the collision checker.
    The owner (2026-11-26): M6 is a test on one level, and after it each
    level's terrain is part of that level's own overhaul; "I would also
@@ -302,7 +303,7 @@ that one job.
       Area B checked 2026-11-27 (decisions/0046); the meadow's terraces
       asked for, and the colour checker corrected (decisions/0048); the
       terraces back, checked and installed the same day
-      (decisions/0051).
+      (decisions/0051). Area C checked 2026-11-28 (decisions/0054).
 7. **M7** Replacement plants and trees, and the optional scatter. First
    the game's side (decisions/0044): cut-out materials in the model pack,
    and the plant effects (decisions/0017) on replaced plants. Then G1's
