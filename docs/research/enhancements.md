@@ -44,6 +44,7 @@ into place). `GDL_SETTINGS=FILE` reads another file and, like
 | water_effects | true | false | NATIVE (this fork): water surfaces ripple, glint and reflect; translucent water fades at the shore; marked as a level loads (Water effects, below) |
 | plant_effects | true | false | NATIVE (this fork): leaves, moss and grass sway; point lights shine through leaves; marked as a level loads (Plant effects, below) |
 | gem_glow | true | false | NATIVE (this fork): crystals, runestones, gargoyle items and magic potions glow in their colour and flare when picked up (Gem glow, below) |
+| gem_glass | true | false | NATIVE (this fork): the crystals' shells drawn as glass, their cores glowing through (Gem glow, below) |
 | item_ground_light | true | false | NATIVE (this fork): items take the baked light of the ground they stand on, darker in shade; point lights stay whole (Items in shade, below) |
 | hud_size | 100 | 100 | NATIVE (this fork): the player panels' size, percent (50..100; HUD layout, below) |
 | hud_edges | true | false | NATIVE (this fork): in widescreen the panels spread to the window's edges |
@@ -710,6 +711,18 @@ decisions/0018-gem-glow.md.
   (+0xd8 0x100, GrabPowerup) and lasts 0.75 s (the owner's choice; first
   the rune sparkle's one second). GDL_DEBUG_GLOW=1 lists the glowing
   items and the flares.
+- **The aura and the glass** (decisions/0053-crystal-glass-and-aura.md,
+  2026-11-27):
+  - **The aura** (with the glow): a crystal's glow ring card draws
+    gs.wgsl gem_aura in place of its four flickering 32 px frames. It
+    keeps the ring's profile and colour, breathes slowly, and has faint
+    turning rays and three glints.
+  - **See-through crystals** (Settings::gem_glass): the shell blends,
+    0.62 straight through and 0.95 at the edge, still writing depth. The
+    core draws just before it (GsDraw::sort_before).
+  - **How:** GsParams `gem`, set by MatReq requests from
+    present_gem_glow, which finds the parts by their original textures.
+  - Both off, frames are pixel-identical.
 
 ### Items in shade (this fork, 2026-11-25)
 

@@ -492,6 +492,12 @@ pub struct GsParams {
     /// NATIVE (this fork, decisions/0032): with a ground light (depth.w),
     /// its colour on the item's sun and ambient (rgb, luma 1; w 1).
     pub ground_tint: Vec4,
+    /// NATIVE (this fork, decisions/0053): a gem part's look, 0 for every
+    /// other draw. x 1: a crystal's shell drawn as glass, its alpha y
+    /// looking straight through and z at the edge. x 2 + phase (0..1): a
+    /// crystal's glow ring card drawn as the aura (gs.wgsl gem_aura), yzw
+    /// the ring's colour.
+    pub gem: Vec4,
 }
 
 /// MBTreeSetZMod's node Z modifier as a factor on the reverse-Z depth
@@ -590,6 +596,9 @@ pub struct GsDraw {
     /// Sorted before every translucent draw, the depth-only window
     /// included: the contents' icon of an X-ray view.
     pub sort_first: bool,
+    /// NATIVE (this fork, decisions/0053): sorted just before the draws at
+    /// its place: a crystal's core, seen through its glass shell.
+    pub sort_before: bool,
     /// An object part drawn by pbDrawObject's VU1 programs, which give
     /// back-facing strip triangles ADC (the screen-space cross product
     /// times the strip header's direction and the vertex parity; header
@@ -630,6 +639,7 @@ impl GsDraw {
             depth_only: false,
             sort_late: false,
             sort_first: false,
+            sort_before: false,
             cull: true,
             depth_mod: false,
         }
@@ -727,6 +737,8 @@ impl Material for GsMaterial {
             -1000.0
         } else if self.draw.sort_late {
             1.0
+        } else if self.draw.sort_before {
+            -0.002
         } else if self.draw.lightmap_pass {
             0.001
         } else {

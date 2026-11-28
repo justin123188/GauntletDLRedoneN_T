@@ -48,6 +48,11 @@ struct GsParams {
     // NATIVE (decisions/0032): with an item's ground light (depth.w), its
     // colour on the item's sun and ambient (rgb, luma 1).
     ground_tint: vec4<f32>,
+    // NATIVE (decisions/0053): a gem part's look, 0 otherwise. x 1: a
+    // crystal's shell as glass (alpha y looking straight through, z at the
+    // edge); x 2 + phase: a crystal's glow ring card as the aura, yzw its
+    // colour.
+    gem: vec4<f32>,
 };
 
 // Point lights, shared by every material: position + radius, colour +
@@ -497,6 +502,41 @@ fn gs_dither(frag: vec2<f32>) -> f32 {
 // the texel 0..255; the result as a display value. `full` (NATIVE
 // ENHANCEMENT, full colour precision): the same product without its steps,
 // at the truncation's mean level (−0.5).
+// NATIVE (this fork, decisions/0053): a crystal's aura, in place of its
+// glow ring's four flickering frames. The ring's profile (brightest at
+// AURA_PEAK of the card's half-width, gone at its edge) breathes slowly;
+// faint rays turn over it and three glints go round, in the ring's own
+// colour (`colour`, its texels at their brightest). `uv` is the card's,
+// `t` the water clock (seconds of updates: it stops with the game),
+// `phase` the gem's own (0..1).
+const AURA_PEAK: f32 = 0.4;
+const AURA_BREATH: f32 = 0.14;
+const AURA_RAYS: f32 = 0.3;
+const AURA_GLINTS: f32 = 0.55;
+const AURA_GAIN: f32 = 1.25;
+// A glass shell's edge brightening (its rim catching the light).
+const GLASS_RIM: f32 = 0.4;
+fn gem_aura(uv: vec2<f32>, t: f32, phase: f32, colour: vec3<f32>) -> vec3<f32> {
+    let tau = 6.2831853;
+    let d = (uv - vec2(0.5)) * 2.0;
+    let r = length(d);
+    let inner = exp(-pow((r - AURA_PEAK) / 0.16, 2.0));
+    let outer = exp(-pow((r - AURA_PEAK) / 0.3, 2.0));
+    let ring = select(outer, inner, r < AURA_PEAK) * (1.0 - smoothstep(0.82, 1.0, r));
+    let breath = 1.0 + AURA_BREATH * sin(tau * (0.6 * t + phase));
+    let a = atan2(d.y, d.x);
+    let band = smoothstep(0.18, 0.4, r) * (1.0 - smoothstep(0.55, 0.95, r));
+    let rays = pow(0.5 + 0.5 * cos(6.0 * a + 0.5 * t + tau * phase), 10.0) + 0.6 * pow(0.5 + 0.5 * cos(4.0 * a - 0.35 * t + 1.7), 14.0);
+    var glints = 0.0;
+    for (var k = 0; k < 3; k = k + 1) {
+        let g = 0.9 * t + tau * (phase + f32(k) / 3.0);
+        let p = vec2(cos(g), sin(g)) * 0.52;
+        let twinkle = 0.5 + 0.5 * sin(3.1 * t + f32(k) * 2.1 + tau * phase);
+        glints = glints + twinkle * exp(-dot(d - p, d - p) / 0.004);
+    }
+    return colour * (AURA_GAIN * (ring * breath + AURA_RAYS * rays * band) + AURA_GLINTS * glints);
+}
+
 fn gs_modulate(cv: vec3<f32>, tex: vec3<f32>, full: bool) -> vec3<f32> {
     if full {
         return max(clamp(cv, vec3(0.0), vec3(255.0 / 128.0)) * tex - 0.5 / 255.0, vec3(0.0));
@@ -803,7 +843,12 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
 #endif
     // Sharp (NATIVE ENHANCEMENT, texfilter.rs): the GPU's own level of
     // detail at the window's resolution, anisotropic, for every texture.
-    let t = select(t_auto, t_lod, params.scale.w > 0.5 && !sharp);
+    var t = select(t_auto, t_lod, params.scale.w > 0.5 && !sharp);
+    // NATIVE (decisions/0053): a crystal's aura in place of its glow ring's
+    // frames (the texture's own alpha kept).
+    if 1.5 < params.gem.x {
+        t = vec4(gem_aura(in.uv, pl_water(pl).x, fract(params.gem.x), params.gem.yzw), t.a);
+    }
     if params.options.x > 0.5 {
         rgb = gs_modulate(rgb, t.rgb, full);
         alpha = alpha * t.a * (255.0 / 128.0);
@@ -984,6 +1029,13 @@ fn gs_fragment(in: VertexOutput) -> vec4<f32> {
     }
     return vec4(v / 255.0, 1.0);
 #else
+    // NATIVE (decisions/0053): a crystal's shell as glass, clearer looking
+    // straight through, more solid at the edge (Schlick-like, power 2).
+    if 0.5 < params.gem.x && params.gem.x < 1.5 {
+        let fr = pow(1.0 - abs(dot(n_geo, to_eye)), 2.0);
+        alpha = mix(params.gem.y, params.gem.z, fr);
+        rgb = rgb * (1.0 + GLASS_RIM * fr);
+    }
     // Display values: the frame is converted once by DisplayToLinear.
     return vec4(min(rgb, vec3(1.0)), min(alpha, 1.0));
 #endif

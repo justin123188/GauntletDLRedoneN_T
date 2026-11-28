@@ -26,6 +26,7 @@ struct GsParams {
     chrome_v: vec4<f32>,
     depth: vec4<f32>,
     ground_tint: vec4<f32>,
+    gem: vec4<f32>,
 };
 
 #ifdef BINDLESS

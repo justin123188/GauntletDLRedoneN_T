@@ -2508,6 +2508,12 @@ struct MatReq {
     /// MBTreeSetZMod's node Z modifier (effect trees): the depth factor of
     /// gdl_client::zmod_depth_factor in a DEPTH_MOD pipeline.
     zmod: i16,
+    /// NATIVE (this fork, decisions/0053): a gem part's look (GsParams gem:
+    /// a crystal's shell as glass, its glow ring card as the aura).
+    gem: Vec4,
+    /// NATIVE (decisions/0053): drawn just before the parts at its place
+    /// (GsDraw::sort_before: a crystal's core, seen through its glass).
+    before: bool,
 }
 
 impl MatRequests {
@@ -2824,20 +2830,24 @@ fn apply_material_requests(
         let glow = r.as_ref().map_or(0.0, |r| r.glow);
         let ground = r.as_ref().map_or(0.0, |r| r.ground);
         let ground_tint = r.as_ref().map_or(Vec3::ONE, |r| r.ground_tint);
+        let gem = r.as_ref().map_or(Vec4::ZERO, |r| r.gem);
+        let before = r.as_ref().is_some_and(|r| r.before);
+        // NATIVE (decisions/0053): a crystal's shell as glass blends.
+        let glass = 0.5 < gem.x && gem.x < 1.5;
         // Requests that blend an opaque part (a Z modifier, a glow or a
         // ground light alone keeps the part's own alpha mode).
         let styled = !(image.is_none() && overlay.is_none() && 0.999 <= alpha && ambient == 0.0 && !flat && r.as_ref().is_none_or(|r| r.uv.is_none() && r.color.is_none()));
-        if !styled && zmod == 0 && glow == 0.0 && ground == 0.0 {
+        if !styled && zmod == 0 && glow == 0.0 && ground == 0.0 && gem == Vec4::ZERO && !before {
             if ov.is_some() {
                 m.0 = base;
                 commands.entity(e).remove::<MatOverride>();
             }
             continue;
         }
-        let alpha_mode = if styled && (b.alpha_mode == AlphaMode::Opaque || matches!(b.alpha_mode, AlphaMode::Mask(_))) { AlphaMode::Blend } else { b.alpha_mode };
+        let alpha_mode = if (styled || glass) && (b.alpha_mode == AlphaMode::Opaque || matches!(b.alpha_mode, AlphaMode::Mask(_))) { AlphaMode::Blend } else { b.alpha_mode };
         // A request's Z modifier, else the base material's own (world decals,
         // shadows, critter colnodes: GsMaterial::with_zmod).
-        let draw = gdl_client::GsDraw { depth_mod: zmod != 0 || b.draw.depth_mod, ..b.draw };
+        let draw = gdl_client::GsDraw { depth_mod: zmod != 0 || b.draw.depth_mod, sort_before: before || b.draw.sort_before, ..b.draw };
         if ov.is_none() {
             let mut own = b.clone();
             own.alpha_mode = alpha_mode;
@@ -2874,6 +2884,7 @@ fn apply_material_requests(
             if zmod != 0 {
                 p.depth.x = gdl_client::zmod_depth_factor(zmod);
             }
+            p.gem = gem;
             if let Some(c) = r.as_ref().and_then(|r| r.color) {
                 p.tint = (b.params.tint.truncate() * c).extend(p.tint.w);
             }
@@ -2896,7 +2907,7 @@ fn apply_material_requests(
             } else {
                 (b.lightmap.clone(), b.lit)
             };
-            let params_changed = cur.params.tint != p.tint || cur.params.scale != p.scale || cur.params.light != p.light || cur.params.light_dir != p.light_dir || cur.params.options != p.options || cur.params.extra != p.extra || cur.params.chrome_u != p.chrome_u || cur.params.chrome_v != p.chrome_v || cur.params.uv_xform != p.uv_xform || cur.params.depth != p.depth || cur.params.ground_tint != p.ground_tint;
+            let params_changed = cur.params.tint != p.tint || cur.params.scale != p.scale || cur.params.light != p.light || cur.params.light_dir != p.light_dir || cur.params.options != p.options || cur.params.extra != p.extra || cur.params.chrome_u != p.chrome_u || cur.params.chrome_v != p.chrome_v || cur.params.uv_xform != p.uv_xform || cur.params.depth != p.depth || cur.params.ground_tint != p.ground_tint || cur.params.gem != p.gem;
             if (cur.base != img || cur.overlay != overlay || params_changed || cur.lightmap != lightmap || cur.lit != lit || cur.draw != draw || cur.alpha_mode != alpha_mode)
                 && let Some(own) = materials.get_mut(&m.0)
             {
@@ -3382,6 +3393,68 @@ const GEM_FLARE: f32 = 3.0;
 const GEM_FLARE_REACH: f32 = 1.0;
 const GEM_AMBIENT: f32 = 0.6;
 
+/// NATIVE (this fork, decisions/0053): a crystal's shell drawn as glass,
+/// its alpha looking straight through and at the edge (gs.wgsl), while
+/// Settings::gem_glass is on.
+const GLASS_CENTRE: f32 = 0.62;
+const GLASS_EDGE: f32 = 0.95;
+
+/// The crystals' colours as POWERUPS labels them (GEMSHEEN_<c> the shell's
+/// texture, GEM_<c>_IN the core's, GLOWRING_<c> the glow ring's, its
+/// frames GLOWRING_<c>00 to 03).
+const CRYSTAL_COLOURS: [&str; 8] = ["RED", "BLUE", "YELLOW", "GREEN", "ORANGE", "WHITE", "BLACK", "PURPLE"];
+
+#[derive(Clone, Copy, PartialEq)]
+enum CrystalPart {
+    Shell,
+    Core,
+    Ring,
+}
+
+/// NATIVE (decisions/0053): the crystals' parts by their original textures
+/// (a model pack replacement by GsMaterial::scroll_from).
+fn crystal_parts(libraries: &Libraries) -> HashMap<AssetId<Image>, CrystalPart> {
+    let mut parts = HashMap::new();
+    let Some(lib) = libraries.0.get("POWERUPS") else { return parts };
+    let mut put = |label: &str, part| {
+        if let Some(h) = lib.textures.get(label) {
+            parts.insert(h.id(), part);
+        }
+        if let Some(h) = lib.label_index.get(label).and_then(|i| lib.record_images.get(i)) {
+            parts.insert(h.id(), part);
+        }
+    };
+    for c in CRYSTAL_COLOURS {
+        put(&format!("GEMSHEEN_{c}"), CrystalPart::Shell);
+        put(&format!("GEM_{c}_IN"), CrystalPart::Core);
+        put(&format!("GLOWRING_{c}"), CrystalPart::Ring);
+        for k in 0..4 {
+            put(&format!("GLOWRING_{c}{k:02}"), CrystalPart::Ring);
+        }
+    }
+    parts
+}
+
+/// NATIVE (decisions/0053): a glow ring texture's colour where it is
+/// brightest (the texels 0.3 to 0.5 of the half-width from its centre), in
+/// texel units: the aura's colour (gs.wgsl gem_aura).
+fn ring_colour(image: &Image) -> Option<Vec3> {
+    let data = image.data.as_ref()?;
+    let (w, h) = (image.width() as usize, image.height() as usize);
+    let (mut sum, mut n) = (Vec3::ZERO, 0.0f32);
+    for y in 0..h {
+        for x in 0..w {
+            let r = Vec2::new((x as f32 + 0.5) / w as f32 - 0.5, (y as f32 + 0.5) / h as f32 - 0.5).length() * 2.0;
+            if (0.3..0.5).contains(&r) {
+                let p = data.get((y * w + x) * 4..(y * w + x) * 4 + 3)?;
+                sum += Vec3::new(f32::from(p[0]), f32::from(p[1]), f32::from(p[2])) / 255.0;
+                n += 1.0;
+            }
+        }
+    }
+    (0.0 < n).then(|| sum / n)
+}
+
 fn is_gem(d: &gdl_core::items::Definition) -> bool {
     d.kind() == 1 && matches!(d.subtype(), 0xf | 10 | 0x10)
 }
@@ -3423,14 +3496,20 @@ fn present_gem_glow(
     (materials, images): (Res<Assets<gdl_client::GsMaterial>>, Res<Assets<Image>>),
     mut glow: ResMut<GemGlow>,
     mut req: ResMut<MatRequests>,
+    libraries: Res<Libraries>,
+    mut rings: Local<HashMap<AssetId<Image>, Vec3>>,
 ) {
     glow.lights.clear();
     if !settings.gem_glow {
         glow.seen.clear();
         glow.taken.clear();
         glow.flares.clear();
-        return;
+        // NATIVE (decisions/0053): the glass crystals need the gems found.
+        if !settings.gem_glass {
+            return;
+        }
     }
+    let parts = crystal_parts(&libraries);
     // DEBUG GDL_DEBUG_GLOW=1: each glowing item's name, place, subtype,
     // potion flags and colour, once, and each potion flare.
     static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -3461,6 +3540,29 @@ fn present_gem_glow(
             }
         }
         if meshes.is_empty() {
+            continue;
+        }
+        // NATIVE (decisions/0053): a crystal's shell as glass, its core
+        // drawn first to show through it, and its glow ring card as the
+        // aura, each gem in its own phase.
+        if d.subtype() == 0xf && !parts.is_empty() {
+            let phase = (slot.index as f32 * 0.618_034).fract();
+            for (e, h) in &meshes {
+                let Some(m) = materials.get(h) else { continue };
+                let source = m.scroll_from.or_else(|| m.base.as_ref().map(|b| b.id()));
+                match source.and_then(|s| parts.get(&s)) {
+                    Some(CrystalPart::Shell) if settings.gem_glass => req.get(*e).gem = Vec4::new(1.0, GLASS_CENTRE, GLASS_EDGE, 0.0),
+                    Some(CrystalPart::Core) if settings.gem_glass => req.get(*e).before = true,
+                    Some(CrystalPart::Ring) if settings.gem_glow => {
+                        let Some(id) = m.base.as_ref().map(|b| b.id()) else { continue };
+                        let c = *rings.entry(id).or_insert_with(|| images.get(id).and_then(ring_colour).unwrap_or(Vec3::ZERO));
+                        req.get(*e).gem = Vec4::new(2.0 + 0.98 * phase, c.x, c.y, c.z);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if !settings.gem_glow {
             continue;
         }
         let p = (Vec3::from_array(r.position()) + Vec3::Y * 0.5) * MIRROR;
@@ -6587,6 +6689,7 @@ fn present_streaks(
                 depth_only: false,
                 sort_late: true,
                 sort_first: false,
+                sort_before: false,
                 cull: false,
                 depth_mod: false,
             },
@@ -6916,6 +7019,7 @@ fn present_particles(
                     depth_only: false,
                     sort_late: false,
                     sort_first: false,
+                    sort_before: false,
                     cull: false,
                     depth_mod: false,
                 },

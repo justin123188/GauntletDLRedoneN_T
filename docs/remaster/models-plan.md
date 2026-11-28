@@ -235,7 +235,8 @@ that one job.
    The gems (the crystals, the gargoyle pieces and the runestones): brief
    2026-11-27 (art-briefs/gems.md, decisions/0050), in three parts. The
    crystals checked and installed the same day, with the original's
-   texture slide carried to replacements (decisions/0052).
+   texture slide carried to replacements (decisions/0052). See-through
+   crystals and a smooth aura in the game the same day (decisions/0053).
 6. **M6** Replacement ground for one level, with the collision checker.
    The owner (2026-11-26): M6 is a test on one level, and after it each
    level's terrain is part of that level's own overhaul; "I would also
